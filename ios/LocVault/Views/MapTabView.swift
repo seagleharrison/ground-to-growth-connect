@@ -1,0 +1,94 @@
+import MapKit
+import SwiftUI
+
+struct MapTabView: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var cameraPosition: MapCameraPosition = .automatic
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if appState.locations.isEmpty {
+                    ContentUnavailableView(
+                        "No locations yet",
+                        systemImage: "map",
+                        description: Text("Locations appear here once consented users report in.")
+                    )
+                } else {
+                    Map(position: $cameraPosition) {
+                        ForEach(appState.locations) { location in
+                            Annotation(location.name, coordinate: location.coordinate) {
+                                VStack(spacing: 2) {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .font(.title2)
+                                        .foregroundStyle(.blue)
+                                    Text(location.name)
+                                        .font(.caption2)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                    }
+                    .mapControls {
+                        MapUserLocationButton()
+                        MapCompass()
+                    }
+                    .onAppear { fitMap() }
+                    .onChange(of: appState.locations.count) { _, _ in fitMap() }
+                }
+            }
+            .navigationTitle("Map")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task { await appState.refreshLocations() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
+            .refreshable {
+                await appState.refreshLocations()
+            }
+        }
+    }
+
+    private func fitMap() {
+        let coords = appState.locations.map(\.coordinate)
+        guard !coords.isEmpty else { return }
+        cameraPosition = .region(region(containing: coords))
+    }
+
+    private func region(containing coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
+        var minLat = coordinates[0].latitude
+        var maxLat = coordinates[0].latitude
+        var minLng = coordinates[0].longitude
+        var maxLng = coordinates[0].longitude
+
+        for coord in coordinates {
+            minLat = min(minLat, coord.latitude)
+            maxLat = max(maxLat, coord.latitude)
+            minLng = min(minLng, coord.longitude)
+            maxLng = max(maxLng, coord.longitude)
+        }
+
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLng + maxLng) / 2
+        )
+        let span = MKCoordinateSpan(
+            latitudeDelta: max(0.02, (maxLat - minLat) * 1.4),
+            longitudeDelta: max(0.02, (maxLng - minLng) * 1.4)
+        )
+        return MKCoordinateRegion(center: center, span: span)
+    }
+}
+
+private extension UserLocation {
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}

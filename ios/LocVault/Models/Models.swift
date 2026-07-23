@@ -1,0 +1,184 @@
+import Foundation
+
+enum PersonType: String, Codable, CaseIterable, Identifiable {
+    case homeless
+    case volunteer
+    case employee
+    case admin
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .homeless: return "Person we serve"
+        case .volunteer: return "Volunteer"
+        case .employee: return "Employee"
+        case .admin: return "Admin"
+        }
+    }
+
+    var isStaff: Bool { self != .homeless }
+}
+
+enum Gender: String, Codable, CaseIterable, Identifiable {
+    case female
+    case male
+    case nonbinary
+    case other
+    case preferNotToSay = "prefer_not_to_say"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .female: return "Female"
+        case .male: return "Male"
+        case .nonbinary: return "Non-binary"
+        case .other: return "Other"
+        case .preferNotToSay: return "Prefer not to say"
+        }
+    }
+}
+
+struct User: Codable, Identifiable {
+    let id: String
+    let personType: String
+    let name: String
+    let email: String?
+    let gender: String?
+    let phone: String?
+    let isStaff: Bool
+}
+
+struct RegisterRequest: Encodable {
+    let name: String
+    let email: String?
+    let gender: String?
+    let phone: String?
+    let personType: String
+    let staffCode: String?
+}
+
+struct RegisterResponse: Codable {
+    let user: User
+    let token: String
+    let message: String?
+}
+
+struct MeResponse: Codable {
+    let user: User
+}
+
+struct DeleteResponse: Codable {
+    let deleted: Bool
+}
+
+struct DisclosureResponse: Codable {
+    let version: String
+    let text: String
+}
+
+struct ConsentStatus: Codable {
+    let granted: Bool
+    let consentVersion: String?
+    let grantedAt: String?
+    let revokedAt: String?
+    let lastRecordedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case granted
+        case consentVersion = "consent_version"
+        case grantedAt = "granted_at"
+        case revokedAt = "revoked_at"
+        case lastRecordedAt = "last_recorded_at"
+    }
+}
+
+struct ConsentRecord: Codable, Identifiable {
+    let id: String
+    let consentVersion: String?
+    let granted: Bool
+    let grantedAt: String?
+    let revokedAt: String?
+    let createdAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case consentVersion = "consent_version"
+        case granted
+        case grantedAt = "granted_at"
+        case revokedAt = "revoked_at"
+        case createdAt = "created_at"
+    }
+}
+
+struct ConsentHistoryResponse: Codable {
+    let records: [ConsentRecord]
+}
+
+struct ConsentActionResponse: Codable {
+    let record: ConsentRecord
+}
+
+struct LocationReportPayload: Codable {
+    let latitude: Double
+    let longitude: Double
+    let accuracyMeters: Double?
+    let reportedAt: String
+}
+
+struct LocationReportResponse: Codable {
+    let report: LocationReportMeta
+}
+
+struct LocationReportMeta: Codable {
+    let id: String?
+    let reportedAt: String
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case reportedAt = "reported_at"
+        case createdAt = "created_at"
+    }
+}
+
+struct UserLocation: Codable, Identifiable {
+    let userId: String
+    let name: String
+    let personType: String?
+    let latitude: Double
+    let longitude: Double
+    let accuracyMeters: Double?
+    let reportedAt: String
+
+    var id: String { userId }
+}
+
+struct LatestLocationsResponse: Codable {
+    let locations: [UserLocation]
+}
+
+struct APIErrorResponse: Codable {
+    let error: String
+}
+
+enum LocVaultError: LocalizedError {
+    case unauthorized
+    case server(String)
+    case network(Error)
+    case decoding
+
+    var errorDescription: String? {
+        switch self {
+        case .unauthorized:
+            return "Session expired. Please sign in again."
+        case .server(let message):
+            return message
+        case .network(let error):
+            return error.localizedDescription
+        case .decoding:
+            return "Unexpected response from server."
+        }
+    }
+}

@@ -1,0 +1,39 @@
+# Fly.io configuration for the Ground to Growth Connect backend.
+# App name must be globally unique — change if "fly launch" reports it's taken.
+app = "ground-to-growth-connect"
+primary_region = "iad"
+
+[build]
+
+[env]
+  PORT = "3001"
+  SQLITE_PATH = "/data/locvault.db"
+  # NOTE: ENCRYPTION_KEY is NOT set here. Set it as a secret:
+  #   fly secrets set ENCRYPTION_KEY=$(openssl rand -hex 32)
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.checks]
+    [http_service.checks.health]
+      method = "GET"
+      path = "/health"
+      interval = "30s"
+      timeout = "5s"
+      grace_period = "10s"
+
+# Persistent disk for the SQLite database.
+# Create once with: fly volumes create locvault_data --size 1 --region iad
+[[mounts]]
+  source = "locvault_data"
+  destination = "/data"
+
+# IMPORTANT: SQLite lives on a single volume, so run exactly ONE machine.
+# Do not scale beyond 1 instance or you'll get divergent databases.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
