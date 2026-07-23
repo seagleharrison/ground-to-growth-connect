@@ -1,0 +1,7 @@
+# Automatic HTTPS reverse proxy for the Ground to Growth Connect API.
+# DOMAIN and TLS_EMAIL are injected from the root .env via docker-compose.
+{$DOMAIN} {
+	tls {$TLS_EMAIL}
+	encode gzip
+	reverse_proxy api:3001
+}

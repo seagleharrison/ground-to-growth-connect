@@ -1,96 +1,150 @@
-# Deploying the Ground to Growth Connect backend
+# Deploying the Ground to Growth Connect API (VPS + containers)
 
-This deploys the Node + SQLite backend to **Fly.io** with a persistent volume, so your
-iPhone can reach it from anywhere over HTTPS (not just on your home Wi-Fi).
+This runs the Node + SQLite backend as a Docker container on your own VPS, with a
+persistent volume for the database and optional automatic HTTPS via Caddy.
 
-> Why Fly.io? SQLite is a single file, so it needs a persistent disk that stays attached
-> to one machine. Fly volumes handle that simply. (Platforms with ephemeral disks like a
-> basic Render/Heroku dyno would lose the database on every restart.)
+Architecture:
 
-## Prerequisites
+```
+            (HTTPS 443)                 (internal network)
+Internet ──▶  Caddy container  ──────▶  api container (Node/Express :3001)
+             auto Let's Encrypt         │
+                                        ▼
+                               g2g_data volume  →  /data/locvault.db  (encrypted PII + coords)
+```
 
-- A Fly.io account (free to create): https://fly.io
-- The Fly CLI (`flyctl`)
+---
 
-Install the CLI:
+## 1. Prerequisites on the VPS
+
+- A Linux VPS (Ubuntu/Debian assumed below) with SSH access.
+- Docker Engine + the Compose plugin. Install if needed:
 
 ```bash
-# macOS (Homebrew)
-brew install flyctl
-
-# or the official installer
-curl -L https://fly.io/install.sh | sh
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER"   # then log out/in so `docker` works without sudo
+docker --version && docker compose version
 ```
 
-## One-time setup
+- **For HTTPS:** a domain/subdomain (e.g. `api.groundtogrowth.org`) with a DNS
+  **A record pointing at the VPS's public IP**, and ports **80 + 443** open in the firewall.
+
+---
+
+## 2. Get the code
 
 ```bash
-cd backend
-
-# 1. Sign in (opens browser)
-fly auth login
-
-# 2. Create the app from the existing fly.toml WITHOUT deploying yet.
-#    If the name "ground-to-growth-connect" is taken, pass a different --name
-#    and update the `app = ...` line in fly.toml to match.
-fly launch --copy-config --no-deploy
-
-# 3. Create the persistent volume for the SQLite database (1 GB).
-fly volumes create locvault_data --size 1 --region iad
-
-# 4. Set the encryption key as a SECRET (never commit this).
-#    Use a brand-new key for production and keep it safe — if it ever changes,
-#    previously stored location data can no longer be decrypted.
-fly secrets set ENCRYPTION_KEY=$(openssl rand -hex 32)
+git clone https://github.com/seagleharrison/ground-to-growth-connect.git
+cd ground-to-growth-connect
 ```
 
-## Deploy
+---
+
+## 3. Configure secrets
 
 ```bash
-cd backend
-fly deploy
+cp .env.example .env
+# Generate a strong encryption key and put it in .env:
+openssl rand -hex 32
 ```
 
-When it finishes, your API is live at:
+Edit `.env` and set at minimum:
 
-```
-https://ground-to-growth-connect.fly.dev
-```
+- `ENCRYPTION_KEY` — the 64-char hex value you just generated.
+  **Back this up.** If it changes, previously stored data can't be decrypted.
+- `STAFF_INVITE_CODE` — the code staff enter to register privileged accounts.
+- For HTTPS: `DOMAIN` and `TLS_EMAIL`.
+- `CORS_ORIGIN` — set to your web app's URL if you deploy the frontend (or `*`).
 
-(Substitute your app name if you changed it. Check with `fly info` or `fly open`.)
+`.env` is git-ignored; never commit it.
 
-Verify:
+---
+
+## 4. Run it
+
+### Option A — Automatic HTTPS (recommended for real devices)
+
+Requires `DOMAIN` + `TLS_EMAIL` set and DNS pointed at the VPS.
 
 ```bash
-curl https://ground-to-growth-connect.fly.dev/health
-# -> {"status":"ok","version":"0.1.0"}
+docker compose --profile tls up -d --build
 ```
 
-## Point the app at the cloud backend
+Caddy obtains a certificate automatically. Your API is then live at:
+
+```
+https://YOUR_DOMAIN/health   ->  {"status":"ok","version":"0.1.0"}
+```
+
+### Option B — Direct HTTP (quick testing only)
+
+Expose the API port directly (iOS will need an ATS exception for plain HTTP, so
+use this only for testing):
+
+```bash
+# In .env set:  API_BIND=0.0.0.0
+docker compose up -d --build
+curl http://YOUR_VPS_IP:3001/health
+```
+
+### Option C — Behind your existing reverse proxy
+
+Leave `API_BIND=127.0.0.1` (default) and point your nginx/Traefik upstream at
+`127.0.0.1:3001`. Start with `docker compose up -d --build` (no `tls` profile).
+
+---
+
+## 5. Point the app at the API
 
 In the iOS app: **Settings → API base URL** →
 
 ```
-https://ground-to-growth-connect.fly.dev
+https://YOUR_DOMAIN
 ```
 
-Because it's HTTPS, it works over cellular and any Wi-Fi — the Mac no longer needs to be running.
+Over HTTPS it works on cellular and any Wi-Fi.
 
-## Pushing backend updates
+---
 
-Every time you change backend code:
+## 6. Operating it
 
+**Logs**
 ```bash
-cd backend
-fly deploy
+docker compose logs -f api
 ```
 
-## Notes & guardrails
+**Update after code changes**
+```bash
+git pull
+docker compose --profile tls up -d --build   # omit --profile tls if not using Caddy
+```
 
-- **Keep it to ONE machine.** SQLite lives on a single volume; do not run `fly scale count 2+`.
-- **Back up the database** periodically: `fly ssh console -C "cat /data/locvault.db" > backup.db` (or use `fly ssh sftp`).
-- **CORS**: the web frontend's allowed origin is still `http://localhost:5173`. If you deploy
-  the web app too, set `CORS_ORIGIN` (e.g. `fly secrets set CORS_ORIGIN=https://yourweb.app`).
-- **Cost**: a single `shared-cpu-1x` / 256 MB machine + 1 GB volume is very cheap and often
-  within Fly's low-cost tier, but check current Fly pricing.
-- **Scaling later**: if you outgrow SQLite, switch to Fly Postgres and update `backend/src/db.js`.
+**Back up the database**
+```bash
+docker compose exec api sh -c "cat /data/locvault.db" > backup-$(date +%F).db
+```
+
+**Restore**
+```bash
+docker compose down
+docker run --rm -v ground-to-growth-connect_g2g_data:/data -v "$PWD":/backup alpine \
+  sh -c "cp /backup/backup-YYYY-MM-DD.db /data/locvault.db"
+docker compose --profile tls up -d
+```
+
+---
+
+## Guardrails
+
+- **Single instance only.** SQLite is one file on one volume — do not run multiple
+  API replicas. If you outgrow it, migrate to Postgres and update `backend/src/db.js`.
+- **Protect `ENCRYPTION_KEY` and `.env`.** Store the key in a password manager.
+- **Firewall:** only expose 80/443 (Caddy) publicly; keep 3001 bound to localhost.
+- **The migration is idempotent** and runs automatically on container start.
+
+---
+
+## Alternative: Fly.io
+
+A `backend/fly.toml` is also included if you'd rather use Fly's managed volumes
+instead of a VPS. See the file for the app/volume config.

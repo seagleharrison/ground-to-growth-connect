@@ -1,19 +1,48 @@
+# Ground to Growth Connect — production container stack for a VPS.
+#
+#   Direct / behind-your-own-proxy:   docker compose up -d --build
+#   With automatic HTTPS (Caddy):     docker compose --profile tls up -d --build
+#
+# Configuration is read from a root .env file (see .env.example).
+
 services:
-  db:
-    image: postgres:16-alpine
+  api:
+    build: ./backend
+    image: g2g-api:latest
+    env_file: ./.env
     environment:
-      POSTGRES_USER: locvault
-      POSTGRES_PASSWORD: locvault_dev
-      POSTGRES_DB: locvault
-    ports:
-      - "5432:5432"
+      # SQLite lives on the mounted volume so data survives restarts/redeploys.
+      SQLITE_PATH: /data/locvault.db
+      NODE_ENV: production
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U locvault -d locvault"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - g2g_data:/data
+    ports:
+      # Defaults to localhost-only so the API isn't publicly exposed unless you
+      # front it with Caddy (profile "tls") or your own proxy. To expose it
+      # directly (e.g. quick testing), set API_BIND=0.0.0.0 in .env.
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-3001}:3001"
+    restart: unless-stopped
+
+  # Optional: TLS-terminating reverse proxy with automatic Let's Encrypt certs.
+  # Enable with:  docker compose --profile tls up -d
+  caddy:
+    image: caddy:2
+    profiles: ["tls"]
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      TLS_EMAIL: ${TLS_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
 
 volumes:
-  pgdata:
+  g2g_data:
+  caddy_data:
+  caddy_config:
