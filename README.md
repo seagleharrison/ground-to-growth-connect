@@ -1,4 +1,4 @@
-# LocVault v0.1
+# Ground to Growth Connect v0.1
 
 Privacy-first location tracking with a **Go backend**, encrypted SQLite storage, and auditable consent records.
 

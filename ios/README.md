@@ -1,12 +1,12 @@
-# LocVault iOS App
+# Ground to Growth Connect iOS App
 
-Native SwiftUI iPhone app for privacy-first location tracking, connecting to the LocVault SQL backend.
+Native SwiftUI iPhone app for privacy-first location tracking, connecting to the Ground to Growth Connect backend.
 
 ## Requirements
 
 - Xcode 16+ (full Xcode app, not Command Line Tools only)
 - iOS 17+ device or simulator
-- LocVault backend running (see root `README.md`)
+- Backend running (see root `README.md`)
 
 ## Open in Xcode
 
@@ -14,7 +14,7 @@ Native SwiftUI iPhone app for privacy-first location tracking, connecting to the
 open "ios/Ground to Growth Connect.xcodeproj"
 ```
 
-1. Select your **Development Team** in Signing & Capabilities (Target → LocVault → Signing)
+1. Select your **Development Team** in Signing & Capabilities (Target → Ground to Growth Connect → Signing)
 2. Choose an iPhone simulator or connected device
 3. Press **Run** (⌘R)
 
