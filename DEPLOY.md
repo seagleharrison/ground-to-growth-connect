@@ -1,6 +1,6 @@
 # Deploying the Ground to Growth Connect API (VPS + containers)
 
-This runs the Node + SQLite backend as a Docker container on your own VPS, with a
+This runs the Go + SQLite backend as a Docker container on your own VPS, with a
 persistent volume for the database and optional automatic HTTPS via Caddy.
 
 Architecture:

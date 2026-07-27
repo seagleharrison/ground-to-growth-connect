@@ -1,12 +1,12 @@
 # LocVault v0.1
 
-Privacy-first location tracking with a **SQL backend** (PostgreSQL), encrypted storage, and auditable consent records.
+Privacy-first location tracking with a **Go backend**, encrypted SQLite storage, and auditable consent records.
 
 ## Features
 
 - **15-minute location reports** — client sends location at most once every 15 minutes
-- **Privacy coarsening** — coordinates rounded to ~100m before encryption
-- **Encryption at rest** — AES-256-GCM for latitude/longitude in PostgreSQL
+- **Privacy coarsening** — coordinates snapped to a ~200m grid before encryption
+- **Encryption at rest** — AES-256-GCM for latitude/longitude/PII in SQLite
 - **Consent management** — full disclosure text, grant/revoke, immutable audit log in SQL
 - **Simple map UI** — view latest locations for consented users
 
@@ -14,32 +14,26 @@ Privacy-first location tracking with a **SQL backend** (PostgreSQL), encrypted s
 
 ```
 iOS app (SwiftUI)  ─┐
-web app (React)    ─┼→  backend (Express)  →  PostgreSQL
+web app (React)    ─┼→  backend (Go, net/http)  →  SQLite
                     ↓
               AES-256-GCM encryption
 ```
 
 ## Quick start
 
-### 1. Start PostgreSQL
-
-```bash
-docker compose up -d
-```
-
-### 2. Configure backend
+### 1. Configure and run the backend
 
 ```bash
 cd backend
 cp .env.example .env
 # Generate a key: openssl rand -hex 32
 # Paste into ENCRYPTION_KEY in .env
-npm install
-npm run migrate
-npm run dev
+go run .
 ```
 
-### 3. Start frontend
+The migration runs automatically (idempotent) on startup — no separate step needed.
+
+### 2. Start frontend
 
 ```bash
 cd frontend
@@ -49,7 +43,7 @@ npm run dev
 
 Open http://localhost:5173
 
-### 4. iOS app
+### 3. iOS app
 
 ```bash
 open "ios/Ground to Growth Connect.xcodeproj"

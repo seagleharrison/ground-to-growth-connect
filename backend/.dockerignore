@@ -1,8 +1,6 @@
-node_modules
 locvault.db
 locvault.db-shm
 locvault.db-wal
 .env
 .env.*
-npm-debug.log*
 .DS_Store

@@ -13,7 +13,6 @@ services:
     environment:
       # SQLite lives on the mounted volume so data survives restarts/redeploys.
       SQLITE_PATH: /data/locvault.db
-      NODE_ENV: production
     volumes:
       - g2g_data:/data
     ports:

@@ -1,10 +1,26 @@
-export const CONSENT_VERSION = process.env.CONSENT_VERSION ?? '1.0';
+// Package consent holds the disclosure text shown to users before they grant
+// location-sharing consent. Ported verbatim from the Node consent/disclosure.js.
+package consent
 
-export const ORG_NAME = 'Ground to Growth Initiative';
-export const ORG_ADDRESS = 'Ground to Growth Initiative, 1305 Barnard Street #2041, Savannah, GA 31401';
+import (
+	"fmt"
+	"os"
+)
 
-export const DISCLOSURE_TEXT = `
-${ORG_NAME} — Location Sharing Consent (v${CONSENT_VERSION})
+const (
+	OrgName    = "Ground to Growth Initiative"
+	OrgAddress = "Ground to Growth Initiative, 1305 Barnard Street #2041, Savannah, GA 31401"
+)
+
+func Version() string {
+	if v := os.Getenv("CONSENT_VERSION"); v != "" {
+		return v
+	}
+	return "1.0"
+}
+
+func DisclosureText() string {
+	return fmt.Sprintf(`%s — Location Sharing Consent (v%s)
 
 “A path to healing, a journey to home.”
 
@@ -37,7 +53,7 @@ YOUR RIGHTS
 • You must opt in before any location is collected.
 • You may revoke consent at any time — location sharing stops immediately.
 • You may request that we delete your data. Contact us at:
-  ${ORG_ADDRESS}
+  %s
 • Choosing not to share your location will never affect your access to our services.
 
 RETENTION
@@ -45,5 +61,5 @@ RETENTION
   us to delete them or close your account.
 
 By granting consent, you confirm that this has been explained to you, that you
-understand it, and that you agree to share your location with ${ORG_NAME}.
-`.trim();
+understand it, and that you agree to share your location with %s.`, OrgName, Version(), OrgAddress, OrgName)
+}
