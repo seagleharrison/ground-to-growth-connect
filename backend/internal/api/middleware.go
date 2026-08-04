@@ -55,7 +55,7 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 
@@ -81,7 +81,7 @@ func (s *Server) withConsent(next http.HandlerFunc) http.HandlerFunc {
 		var granted int64
 		err := s.db.QueryRow(`SELECT granted FROM user_consent_status WHERE user_id = ?`, u.ID).Scan(&granted)
 		if err != nil && err != sql.ErrNoRows {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 		if err == sql.ErrNoRows || granted == 0 {

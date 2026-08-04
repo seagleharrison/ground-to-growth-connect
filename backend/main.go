@@ -7,19 +7,49 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"ground-to-growth-connect-backend/internal/api"
 	"ground-to-growth-connect-backend/internal/dbstore"
-
-	_ "modernc.org/sqlite"
 )
 
 //go:embed sql/001_init.sql
 var migrationSQL string
 
+// loadDotEnv is a minimal stand-in for the Node backend's `dotenv` dependency,
+// used for local (non-container) development. In Docker, docker-compose's
+// env_file already populates the real environment, so this is a no-op there
+// (any variable already set in the real environment always wins).
+func loadDotEnv(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
+		os.Setenv(key, strings.TrimSpace(value))
+	}
+}
+
 func main() {
+	loadDotEnv(".env")
+
 	sqlitePath := os.Getenv("SQLITE_PATH")
 	if sqlitePath == "" {
 		sqlitePath = "locvault.db"

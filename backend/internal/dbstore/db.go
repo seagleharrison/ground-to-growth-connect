@@ -1,7 +1,11 @@
 // Package dbstore opens the SQLite database and runs the (idempotent) schema migration.
 package dbstore
 
-import "database/sql"
+import (
+	"database/sql"
+
+	_ "modernc.org/sqlite"
+)
 
 func Open(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", path)

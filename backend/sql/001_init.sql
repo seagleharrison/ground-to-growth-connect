@@ -84,7 +84,10 @@ FROM (
     granted_at,
     revoked_at,
     created_at AS last_recorded_at,
-    ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC, id DESC) AS rn
+    -- Tie-break on rowid (monotonic insertion order), not id: id is a random
+    -- UUID, so it carries no ordering information when two rows share the
+    -- same created_at timestamp (easily possible at millisecond precision).
+    ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC, rowid DESC) AS rn
   FROM consent_records
 )
 WHERE rn = 1;

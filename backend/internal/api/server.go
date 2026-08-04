@@ -139,6 +139,13 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
+// writeInternalError logs the real underlying error server-side (never sent
+// to the client) before responding with the generic 500 message.
+func writeInternalError(w http.ResponseWriter, err error) {
+	log.Printf("internal server error: %v", err)
+	writeError(w, http.StatusInternalServerError, "Internal server error")
+}
+
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": "0.1.0"})
 }

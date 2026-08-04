@@ -148,7 +148,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	token, err := cryptox.GenerateToken()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 	tokenHash := cryptox.HashToken(token)
@@ -156,7 +156,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	nameTrunc := truncateRunes(name, 200)
 	nameEnc, err := cryptox.EncryptString(&nameTrunc)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 
@@ -164,7 +164,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if e := strings.TrimSpace(body.Email); e != "" {
 		e = truncateRunes(e, 200)
 		if emailEnc, err = cryptox.EncryptString(&e); err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 	}
@@ -173,7 +173,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if body.Gender != "" {
 		g := body.Gender
 		if genderEnc, err = cryptox.EncryptString(&g); err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 	}
@@ -182,7 +182,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if p := strings.TrimSpace(body.Phone); p != "" {
 		p = truncateRunes(p, 40)
 		if phoneEnc, err = cryptox.EncryptString(&p); err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 	}
@@ -196,13 +196,13 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		personType, nameEnc, emailEnc, genderEnc, phoneEnc, tokenHash,
 	).Scan(&u.ID, &u.NameEncrypted, &u.EmailEncrypted, &u.GenderEncrypted, &u.PhoneEncrypted)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 
 	profile, err := profileFromUser(&u)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 
@@ -216,7 +216,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	profile, err := profileFromUser(userFromCtx(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"user": profile})
@@ -225,7 +225,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	u := userFromCtx(r)
 	if _, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, u.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
@@ -259,7 +259,7 @@ func (s *Server) handleConsentStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 
@@ -289,7 +289,7 @@ func (s *Server) handleConsentHistory(w http.ResponseWriter, r *http.Request) {
 		u.ID,
 	)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -300,7 +300,7 @@ func (s *Server) handleConsentHistory(w http.ResponseWriter, r *http.Request) {
 		var version, grantedAt, revokedAt sql.NullString
 		var granted int64
 		if err := rows.Scan(&rec.ID, &version, &granted, &grantedAt, &revokedAt, &rec.CreatedAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 		rec.ConsentVersion = toPtr(version)
@@ -350,7 +350,7 @@ func (s *Server) handleSetConsent(w http.ResponseWriter, r *http.Request) {
 		u.ID, consent.Version(), consent.DisclosureText(), boolToInt(*body.Granted), grantedAtArg, revokedAtArg, uaHashArg,
 	).Scan(&rec.ID, &version, &grantedInt, &ga, &ra, &rec.CreatedAt)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 
@@ -411,12 +411,12 @@ func (s *Server) handleCreateLocation(w http.ResponseWriter, r *http.Request) {
 	gridLat, gridLng := cryptox.SnapToGrid(lat, lng)
 	latEnc, err := cryptox.EncryptCoordinate(gridLat)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 	lngEnc, err := cryptox.EncryptCoordinate(gridLng)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 
@@ -434,7 +434,7 @@ func (s *Server) handleCreateLocation(w http.ResponseWriter, r *http.Request) {
 		u.ID, latEnc, lngEnc, accuracyArg, reportedAt,
 	).Scan(&rec.ID, &rec.ReportedAt, &rec.CreatedAt)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 
@@ -464,8 +464,11 @@ func (s *Server) handleLatestLocations(w http.ResponseWriter, r *http.Request) {
 		    lr.longitude_encrypted,
 		    lr.accuracy_meters,
 		    lr.reported_at,
+		    -- Tie-break on rowid (insertion order), not id: id is a random
+		    -- UUID and carries no ordering information within the same
+		    -- reported_at millisecond.
 		    ROW_NUMBER() OVER (
-		      PARTITION BY lr.user_id ORDER BY lr.reported_at DESC, lr.id DESC
+		      PARTITION BY lr.user_id ORDER BY lr.reported_at DESC, lr.rowid DESC
 		    ) AS rn
 		  FROM location_reports lr
 		  JOIN users u ON u.id = lr.user_id
@@ -474,7 +477,7 @@ func (s *Server) handleLatestLocations(w http.ResponseWriter, r *http.Request) {
 		)
 		WHERE rn = 1`)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -485,22 +488,22 @@ func (s *Server) handleLatestLocations(w http.ResponseWriter, r *http.Request) {
 		var accuracy sql.NullFloat64
 		var loc userLocationJSON
 		if err := rows.Scan(&loc.UserID, &nameEnc, &loc.PersonType, &latEnc, &lngEnc, &accuracy, &loc.ReportedAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 		name, err := cryptox.DecryptString(nameEnc)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 		lat, err := cryptox.DecryptCoordinate(latEnc)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 		lng, err := cryptox.DecryptCoordinate(lngEnc)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 		loc.Name = name
@@ -531,7 +534,7 @@ func (s *Server) handleMyLocations(w http.ResponseWriter, r *http.Request) {
 		u.ID,
 	)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
+		writeInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -542,17 +545,17 @@ func (s *Server) handleMyLocations(w http.ResponseWriter, r *http.Request) {
 		var accuracy sql.NullFloat64
 		var rep myLocationJSON
 		if err := rows.Scan(&latEnc, &lngEnc, &accuracy, &rep.ReportedAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 		lat, err := cryptox.DecryptCoordinate(latEnc)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 		lng, err := cryptox.DecryptCoordinate(lngEnc)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			writeInternalError(w, err)
 			return
 		}
 		rep.Latitude = lat
