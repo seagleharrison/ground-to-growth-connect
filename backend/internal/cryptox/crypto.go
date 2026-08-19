@@ -53,9 +53,10 @@ func newGCM() (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
-// EncryptString encrypts a value to an [iv | tag | ciphertext] blob for BLOB
-// storage. A nil input returns a nil blob (mirrors the Node `value == null` check).
-func EncryptString(value *string) ([]byte, error) {
+// EncryptBytes encrypts raw bytes to an [iv | tag | ciphertext] blob for BLOB
+// storage. A nil input returns a nil blob. This is the core used by both
+// EncryptString (text fields) and document upload (file content).
+func EncryptBytes(value []byte) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -69,7 +70,7 @@ func EncryptString(value *string) ([]byte, error) {
 	}
 	// gcm.Seal appends the tag to the end of the ciphertext; reorder to
 	// [iv | tag | ciphertext] to match the existing on-disk/wire format.
-	sealed := gcm.Seal(nil, iv, []byte(*value), nil)
+	sealed := gcm.Seal(nil, iv, value, nil)
 	ciphertext := sealed[:len(sealed)-tagLength]
 	tag := sealed[len(sealed)-tagLength:]
 
@@ -80,8 +81,8 @@ func EncryptString(value *string) ([]byte, error) {
 	return out, nil
 }
 
-// DecryptString reverses EncryptString. A nil blob returns a nil string.
-func DecryptString(blob []byte) (*string, error) {
+// DecryptBytes reverses EncryptBytes. A nil blob returns nil bytes.
+func DecryptBytes(blob []byte) ([]byte, error) {
 	if blob == nil {
 		return nil, nil
 	}
@@ -100,7 +101,24 @@ func DecryptString(blob []byte) (*string, error) {
 	sealed = append(sealed, ciphertext...)
 	sealed = append(sealed, tag...)
 
-	plain, err := gcm.Open(nil, iv, sealed, nil)
+	return gcm.Open(nil, iv, sealed, nil)
+}
+
+// EncryptString encrypts a value to an [iv | tag | ciphertext] blob for BLOB
+// storage. A nil input returns a nil blob (mirrors the Node `value == null` check).
+func EncryptString(value *string) ([]byte, error) {
+	if value == nil {
+		return nil, nil
+	}
+	return EncryptBytes([]byte(*value))
+}
+
+// DecryptString reverses EncryptString. A nil blob returns a nil string.
+func DecryptString(blob []byte) (*string, error) {
+	if blob == nil {
+		return nil, nil
+	}
+	plain, err := DecryptBytes(blob)
 	if err != nil {
 		return nil, err
 	}

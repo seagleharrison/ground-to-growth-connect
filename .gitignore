@@ -10,6 +10,9 @@ dist/
 *.db-shm
 *.db-wal
 
+# Local-dev document blob storage fallback (used when B2_* env vars are unset)
+backend/documents/
+
 # Xcode
 ios/**/DerivedData/
 ios/**/*.xcuserstate

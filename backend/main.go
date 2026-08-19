@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"ground-to-growth-connect-backend/internal/api"
+	"ground-to-growth-connect-backend/internal/blobstore"
 	"ground-to-growth-connect-backend/internal/dbstore"
 )
 
@@ -47,6 +49,35 @@ func loadDotEnv(path string) {
 	}
 }
 
+// newDocumentStore uses Backblaze B2 when all B2_* env vars are set, and
+// otherwise falls back to a local directory next to the SQLite database —
+// so the app works out of the box before a bucket has been configured.
+func newDocumentStore(sqlitePath string) (blobstore.Store, error) {
+	endpoint := os.Getenv("B2_ENDPOINT")
+	region := os.Getenv("B2_REGION")
+	bucket := os.Getenv("B2_BUCKET")
+	keyID := os.Getenv("B2_KEY_ID")
+	appKey := os.Getenv("B2_APPLICATION_KEY")
+
+	if endpoint != "" && region != "" && bucket != "" && keyID != "" && appKey != "" {
+		log.Printf("Document storage: Backblaze B2 bucket %q", bucket)
+		return blobstore.NewB2Store(blobstore.B2Config{
+			Endpoint:       endpoint,
+			Region:         region,
+			Bucket:         bucket,
+			KeyID:          keyID,
+			ApplicationKey: appKey,
+		}), nil
+	}
+
+	localPath := os.Getenv("DOCUMENTS_LOCAL_PATH")
+	if localPath == "" {
+		localPath = filepath.Join(filepath.Dir(sqlitePath), "documents")
+	}
+	log.Printf("Document storage: local disk at %s (set B2_* env vars to use Backblaze B2 instead)", localPath)
+	return blobstore.NewLocalDiskStore(localPath)
+}
+
 func main() {
 	loadDotEnv(".env")
 
@@ -66,6 +97,11 @@ func main() {
 	}
 	log.Printf("Migration complete. Database: %s", sqlitePath)
 
+	docs, err := newDocumentStore(sqlitePath)
+	if err != nil {
+		log.Fatalf("configure document storage: %v", err)
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3001"
@@ -75,7 +111,7 @@ func main() {
 		host = "0.0.0.0"
 	}
 
-	handler := api.NewServer(db)
+	handler := api.NewServer(db, docs)
 	srv := &http.Server{
 		Addr:              host + ":" + port,
 		Handler:           handler,

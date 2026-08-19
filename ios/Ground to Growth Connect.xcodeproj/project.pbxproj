@@ -18,6 +18,9 @@
 		B10000000000000000000009 /* MapTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000009 /* MapTabView.swift */; };
 		B10000000000000000000010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000010 /* SettingsView.swift */; };
 		B10000000000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000011 /* Assets.xcassets */; };
+		B10000000000000000000012 /* DocumentScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000013 /* DocumentScanner.swift */; };
+		B10000000000000000000013 /* DocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000014 /* DocumentsView.swift */; };
+		B10000000000000000000014 /* BiometricAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000015 /* BiometricAuth.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +37,9 @@
 		F10000000000000000000010 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F10000000000000000000011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F10000000000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F10000000000000000000013 /* DocumentScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScanner.swift; sourceTree = "<group>"; };
+		F10000000000000000000014 /* DocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsView.swift; sourceTree = "<group>"; };
+		F10000000000000000000015 /* BiometricAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricAuth.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -92,6 +98,8 @@
 				F10000000000000000000004 /* APIClient.swift */,
 				F10000000000000000000005 /* KeychainService.swift */,
 				F10000000000000000000006 /* LocationTracker.swift */,
+				F10000000000000000000013 /* DocumentScanner.swift */,
+				F10000000000000000000015 /* BiometricAuth.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -103,6 +111,7 @@
 				F10000000000000000000008 /* ConsentView.swift */,
 				F10000000000000000000009 /* MapTabView.swift */,
 				F10000000000000000000010 /* SettingsView.swift */,
+				F10000000000000000000014 /* DocumentsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -186,6 +195,9 @@
 				B10000000000000000000008 /* ConsentView.swift in Sources */,
 				B10000000000000000000009 /* MapTabView.swift in Sources */,
 				B10000000000000000000010 /* SettingsView.swift in Sources */,
+				B10000000000000000000012 /* DocumentScanner.swift in Sources */,
+				B10000000000000000000013 /* DocumentsView.swift in Sources */,
+				B10000000000000000000014 /* BiometricAuth.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -11,6 +11,11 @@ import (
 
 var staffTypes = map[string]bool{"volunteer": true, "employee": true, "admin": true}
 
+const (
+	consentTypeLocation  = "location_sharing"
+	consentTypeDocuments = "document_storage"
+)
+
 func isStaff(personType string) bool {
 	return staffTypes[personType]
 }
@@ -75,19 +80,33 @@ func (s *Server) withStaff(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (s *Server) withConsent(next http.HandlerFunc) http.HandlerFunc {
+// withConsentType gates a handler on a specific, independent consent type
+// (location sharing vs. document storage are tracked separately — see the
+// consent_type column and the repartitioned user_consent_status view).
+func (s *Server) withConsentType(consentType, deniedMessage string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		u := userFromCtx(r)
 		var granted int64
-		err := s.db.QueryRow(`SELECT granted FROM user_consent_status WHERE user_id = ?`, u.ID).Scan(&granted)
+		err := s.db.QueryRow(
+			`SELECT granted FROM user_consent_status WHERE user_id = ? AND consent_type = ?`,
+			u.ID, consentType,
+		).Scan(&granted)
 		if err != nil && err != sql.ErrNoRows {
 			writeInternalError(w, err)
 			return
 		}
 		if err == sql.ErrNoRows || granted == 0 {
-			writeError(w, http.StatusForbidden, "Location tracking consent not granted")
+			writeError(w, http.StatusForbidden, deniedMessage)
 			return
 		}
 		next(w, r)
 	}
+}
+
+func (s *Server) withConsent(next http.HandlerFunc) http.HandlerFunc {
+	return s.withConsentType(consentTypeLocation, "Location tracking consent not granted", next)
+}
+
+func (s *Server) withDocumentConsent(next http.HandlerFunc) http.HandlerFunc {
+	return s.withConsentType(consentTypeDocuments, "Document storage consent not granted", next)
 }

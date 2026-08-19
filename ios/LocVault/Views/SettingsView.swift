@@ -82,6 +82,9 @@ struct MainTabView: View {
             } else {
                 ConsentView()
                     .tabItem { Label("Share", systemImage: "location.fill") }
+
+                DocumentsView()
+                    .tabItem { Label("Documents", systemImage: "lock.doc") }
             }
 
             SettingsView()

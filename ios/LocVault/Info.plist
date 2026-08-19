@@ -28,6 +28,10 @@
 	<string>Ground to Growth Connect needs your location to send privacy-coarsened reports every 15 minutes after you grant consent.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Ground to Growth Connect connects to your server on the local network to send location reports.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Ground to Growth Connect uses the camera to scan documents, like an ID or Social Security card, that you choose to store securely after granting consent.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Ground to Growth Connect uses Face ID to keep the app and your stored documents locked when you're not using them.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

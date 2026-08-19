@@ -74,13 +74,65 @@ final class APIClient {
         return response.locations
     }
 
+    // MARK: - Document storage consent
+
+    func fetchDocumentDisclosure() async throws -> DisclosureResponse {
+        try await request(path: "/api/consent/documents/disclosure", authenticated: false)
+    }
+
+    func fetchDocumentConsentStatus() async throws -> ConsentStatus {
+        try await request(path: "/api/consent/documents/status")
+    }
+
+    func fetchDocumentConsentHistory() async throws -> [ConsentRecord] {
+        let response: ConsentHistoryResponse = try await request(path: "/api/consent/documents/history")
+        return response.records
+    }
+
+    func setDocumentConsent(granted: Bool) async throws -> ConsentRecord {
+        let response: ConsentActionResponse = try await request(
+            path: "/api/consent/documents",
+            method: "POST",
+            body: ["granted": granted]
+        )
+        return response.record
+    }
+
+    // MARK: - Documents
+
+    func uploadDocument(_ payload: UploadDocumentRequest) async throws -> DocumentMeta {
+        // Longer timeout than the default 30s: this is a real file upload,
+        // not a small JSON request, and may run over a slow connection.
+        let response: UploadDocumentResponse = try await request(
+            path: "/api/documents",
+            method: "POST",
+            body: payload,
+            timeout: 60
+        )
+        return response.document
+    }
+
+    func fetchDocuments() async throws -> [DocumentMeta] {
+        let response: ListDocumentsResponse = try await request(path: "/api/documents")
+        return response.documents
+    }
+
+    func fetchDocument(id: String) async throws -> GetDocumentResponse {
+        try await request(path: "/api/documents/\(id)", timeout: 60)
+    }
+
+    func deleteDocument(id: String) async throws {
+        let _: DeleteResponse = try await request(path: "/api/documents/\(id)", method: "DELETE")
+    }
+
     // MARK: - Private
 
     private func request<T: Decodable>(
         path: String,
         method: String = "GET",
         body: Encodable? = nil,
-        authenticated: Bool = true
+        authenticated: Bool = true,
+        timeout: TimeInterval? = nil
     ) async throws -> T {
         guard let url = URL(string: baseURL.trimmingCharacters(in: .init(charactersIn: "/")) + path) else {
             throw LocVaultError.server("Invalid API URL.")
@@ -90,6 +142,9 @@ final class APIClient {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("LocVault-iOS/0.1", forHTTPHeaderField: "User-Agent")
+        if let timeout {
+            request.timeoutInterval = timeout
+        }
 
         if authenticated {
             guard let token = KeychainService.loadToken() else {

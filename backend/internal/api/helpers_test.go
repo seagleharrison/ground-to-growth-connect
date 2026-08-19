@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,16 +10,20 @@ import (
 	"path/filepath"
 	"testing"
 
+	"ground-to-growth-connect-backend/internal/blobstore"
 	"ground-to-growth-connect-backend/internal/dbstore"
 )
 
 const testEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 const testStaffCode = "test-staff-code"
 
-// newTestServer spins up a real Server backed by a temp-file SQLite database,
-// migrated with the actual production schema, so these tests exercise the
-// full request path (routing, middleware, SQL, encryption) rather than mocks.
-func newTestServer(t *testing.T) http.Handler {
+// setupTestServer spins up a real Server backed by a temp-file SQLite
+// database, migrated with the actual production schema, so these tests
+// exercise the full request path (routing, middleware, SQL, encryption)
+// rather than mocks. Most tests only need the handler — use newTestServer
+// for those; setupTestServer is for the rare test that also needs direct DB
+// access (e.g. to check an audit log row).
+func setupTestServer(t *testing.T) (http.Handler, *sql.DB) {
 	t.Helper()
 	t.Setenv("ENCRYPTION_KEY", testEncryptionKey)
 	t.Setenv("STAFF_INVITE_CODE", testStaffCode)
@@ -40,7 +45,18 @@ func newTestServer(t *testing.T) http.Handler {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	return NewServer(db)
+	docs, err := blobstore.NewLocalDiskStore(filepath.Join(t.TempDir(), "documents"))
+	if err != nil {
+		t.Fatalf("blobstore.NewLocalDiskStore: %v", err)
+	}
+
+	return NewServer(db, docs), db
+}
+
+func newTestServer(t *testing.T) http.Handler {
+	t.Helper()
+	h, _ := setupTestServer(t)
+	return h
 }
 
 func doRequest(t *testing.T, h http.Handler, method, path, token string, body interface{}) *httptest.ResponseRecorder {

@@ -9,16 +9,19 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"ground-to-growth-connect-backend/internal/blobstore"
 )
 
 type Server struct {
 	db           *sql.DB
+	docs         blobstore.Store
 	corsOrigins  []string
 	corsWildcard bool
 }
 
-func NewServer(db *sql.DB) http.Handler {
-	s := &Server{db: db}
+func NewServer(db *sql.DB, docs blobstore.Store) http.Handler {
+	s := &Server{db: db, docs: docs}
 
 	raw := os.Getenv("CORS_ORIGIN")
 	if raw == "" {
@@ -47,9 +50,20 @@ func NewServer(db *sql.DB) http.Handler {
 	mux.HandleFunc("GET /api/consent/history", s.withAuth(s.handleConsentHistory))
 	mux.HandleFunc("POST /api/consent", s.withAuth(s.handleSetConsent))
 
+	mux.HandleFunc("GET /api/consent/documents/disclosure", s.handleDocumentDisclosure)
+	mux.HandleFunc("GET /api/consent/documents/status", s.withAuth(s.handleDocumentConsentStatus))
+	mux.HandleFunc("GET /api/consent/documents/history", s.withAuth(s.handleDocumentConsentHistory))
+	mux.HandleFunc("POST /api/consent/documents", s.withAuth(s.handleSetDocumentConsent))
+
 	mux.HandleFunc("POST /api/locations", s.withAuth(s.withConsent(s.handleCreateLocation)))
 	mux.HandleFunc("GET /api/locations/latest", s.withAuth(s.withStaff(s.handleLatestLocations)))
 	mux.HandleFunc("GET /api/locations/mine", s.withAuth(s.handleMyLocations))
+
+	mux.HandleFunc("POST /api/documents", s.withAuth(s.withDocumentConsent(s.handleUploadDocument)))
+	mux.HandleFunc("GET /api/documents", s.withAuth(s.handleListDocuments))
+	mux.HandleFunc("GET /api/documents/on-file", s.withAuth(s.withStaff(s.handleDocumentsOnFile)))
+	mux.HandleFunc("GET /api/documents/{id}", s.withAuth(s.handleGetDocument))
+	mux.HandleFunc("DELETE /api/documents/{id}", s.withAuth(s.handleDeleteDocument))
 
 	mux.HandleFunc("/", s.handleNotFound)
 

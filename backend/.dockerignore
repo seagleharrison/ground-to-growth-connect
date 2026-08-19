@@ -1,6 +1,7 @@
 locvault.db
 locvault.db-shm
 locvault.db-wal
+documents/
 .env
 .env.*
 .DS_Store

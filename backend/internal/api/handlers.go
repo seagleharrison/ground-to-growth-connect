@@ -232,23 +232,34 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- consent ---
+//
+// Location sharing and document storage are independent consent flows
+// (consent_type in the DB); the handlers below are thin, type-specific
+// wrappers around shared logic so both sets of routes behave identically.
 
 func (s *Server) handleDisclosure(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"version": consent.Version(),
-		"text":    consent.DisclosureText(),
+		"text":    consent.LocationDisclosureText(),
 	})
 }
 
-func (s *Server) handleConsentStatus(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleDocumentDisclosure(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"version": consent.Version(),
+		"text":    consent.DocumentDisclosureText(),
+	})
+}
+
+func (s *Server) consentStatus(w http.ResponseWriter, r *http.Request, consentType string) {
 	u := userFromCtx(r)
 	var granted int64
 	var consentVersion, grantedAt, revokedAt, lastRecordedAt sql.NullString
 
 	err := s.db.QueryRow(
 		`SELECT granted, consent_version, granted_at, revoked_at, last_recorded_at
-		 FROM user_consent_status WHERE user_id = ?`,
-		u.ID,
+		 FROM user_consent_status WHERE user_id = ? AND consent_type = ?`,
+		u.ID, consentType,
 	).Scan(&granted, &consentVersion, &grantedAt, &revokedAt, &lastRecordedAt)
 
 	if err == sql.ErrNoRows {
@@ -272,6 +283,14 @@ func (s *Server) handleConsentStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleConsentStatus(w http.ResponseWriter, r *http.Request) {
+	s.consentStatus(w, r, consentTypeLocation)
+}
+
+func (s *Server) handleDocumentConsentStatus(w http.ResponseWriter, r *http.Request) {
+	s.consentStatus(w, r, consentTypeDocuments)
+}
+
 type consentRecordJSON struct {
 	ID             string  `json:"id"`
 	ConsentVersion *string `json:"consent_version"`
@@ -281,12 +300,12 @@ type consentRecordJSON struct {
 	CreatedAt      string  `json:"created_at"`
 }
 
-func (s *Server) handleConsentHistory(w http.ResponseWriter, r *http.Request) {
+func (s *Server) consentHistory(w http.ResponseWriter, r *http.Request, consentType string) {
 	u := userFromCtx(r)
 	rows, err := s.db.Query(
 		`SELECT id, consent_version, granted, granted_at, revoked_at, created_at
-		 FROM consent_records WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
-		u.ID,
+		 FROM consent_records WHERE user_id = ? AND consent_type = ? ORDER BY created_at DESC LIMIT 50`,
+		u.ID, consentType,
 	)
 	if err != nil {
 		writeInternalError(w, err)
@@ -313,11 +332,19 @@ func (s *Server) handleConsentHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"records": records})
 }
 
+func (s *Server) handleConsentHistory(w http.ResponseWriter, r *http.Request) {
+	s.consentHistory(w, r, consentTypeLocation)
+}
+
+func (s *Server) handleDocumentConsentHistory(w http.ResponseWriter, r *http.Request) {
+	s.consentHistory(w, r, consentTypeDocuments)
+}
+
 type setConsentRequest struct {
 	Granted *bool `json:"granted"`
 }
 
-func (s *Server) handleSetConsent(w http.ResponseWriter, r *http.Request) {
+func (s *Server) setConsent(w http.ResponseWriter, r *http.Request, consentType, disclosureText string) {
 	u := userFromCtx(r)
 
 	var body setConsentRequest
@@ -344,10 +371,10 @@ func (s *Server) handleSetConsent(w http.ResponseWriter, r *http.Request) {
 	var grantedInt int64
 	err := s.db.QueryRow(
 		`INSERT INTO consent_records
-		   (user_id, consent_version, disclosure_text, granted, granted_at, revoked_at, user_agent_hash)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		   (user_id, consent_type, consent_version, disclosure_text, granted, granted_at, revoked_at, user_agent_hash)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		 RETURNING id, consent_version, granted, granted_at, revoked_at, created_at`,
-		u.ID, consent.Version(), consent.DisclosureText(), boolToInt(*body.Granted), grantedAtArg, revokedAtArg, uaHashArg,
+		u.ID, consentType, consent.Version(), disclosureText, boolToInt(*body.Granted), grantedAtArg, revokedAtArg, uaHashArg,
 	).Scan(&rec.ID, &version, &grantedInt, &ga, &ra, &rec.CreatedAt)
 	if err != nil {
 		writeInternalError(w, err)
@@ -360,6 +387,14 @@ func (s *Server) handleSetConsent(w http.ResponseWriter, r *http.Request) {
 	rec.RevokedAt = toPtr(ra)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"record": rec})
+}
+
+func (s *Server) handleSetConsent(w http.ResponseWriter, r *http.Request) {
+	s.setConsent(w, r, consentTypeLocation, consent.LocationDisclosureText())
+}
+
+func (s *Server) handleSetDocumentConsent(w http.ResponseWriter, r *http.Request) {
+	s.setConsent(w, r, consentTypeDocuments, consent.DocumentDisclosureText())
 }
 
 func boolToInt(b bool) int {

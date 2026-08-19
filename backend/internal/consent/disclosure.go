@@ -1,5 +1,6 @@
 // Package consent holds the disclosure text shown to users before they grant
-// location-sharing consent. Ported verbatim from the Node consent/disclosure.js.
+// consent — for location sharing (ported verbatim from the Node
+// consent/disclosure.js) and, separately, for document storage.
 package consent
 
 import (
@@ -12,6 +13,8 @@ const (
 	OrgAddress = "Ground to Growth Initiative, 1305 Barnard Street #2041, Savannah, GA 31401"
 )
 
+// Version applies to both consent types. Bump CONSENT_VERSION whenever
+// either disclosure's text changes.
 func Version() string {
 	if v := os.Getenv("CONSENT_VERSION"); v != "" {
 		return v
@@ -19,7 +22,7 @@ func Version() string {
 	return "1.0"
 }
 
-func DisclosureText() string {
+func LocationDisclosureText() string {
 	return fmt.Sprintf(`%s — Location Sharing Consent (v%s)
 
 “A path to healing, a journey to home.”
@@ -62,4 +65,49 @@ RETENTION
 
 By granting consent, you confirm that this has been explained to you, that you
 understand it, and that you agree to share your location with %s.`, OrgName, Version(), OrgAddress, OrgName)
+}
+
+func DocumentDisclosureText() string {
+	return fmt.Sprintf(`%s — Document Storage Consent (v%s)
+
+“A path to healing, a journey to home.”
+
+This app also lets you store copies of important personal documents — like a
+government ID, Social Security card, or birth certificate — so you always have
+access to them, even if the physical copies are lost, stolen, or damaged. This is
+completely separate from location sharing: you can use one without the other.
+
+WHAT WE COLLECT
+• A photo or scan of documents you choose to upload, and the type of document you
+  say it is (e.g. "government ID").
+• The date and time you upload or delete a document.
+
+WHO CAN SEE YOUR DOCUMENTS
+• Only you. Ground to Growth staff can see that you have a document of a certain
+  type on file, but staff have no way to view its contents — the file itself is
+  encrypted and only ever decrypted for your own account's requests.
+
+HOW WE PROTECT YOUR INFORMATION
+• Every document is encrypted (AES-256-GCM) before it is saved, the same
+  protection used for your location data.
+• Access requires your personal account token, on your own device.
+• Every time a document is actually opened, that access is permanently logged,
+  so there is always a record of when your files were viewed.
+
+YOUR RIGHTS
+• You must opt in before you can upload any document.
+• You may revoke this consent at any time; it does not delete documents already
+  stored, but stops you from uploading new ones until you opt in again.
+• You may delete any individual document, at any time, permanently.
+• You may request that we delete all of your data. Contact us at:
+  %s
+• Choosing not to store documents will never affect your access to our services.
+
+RETENTION
+• Documents are kept only as long as you want them stored, until you delete them
+  yourself or close your account.
+
+By granting consent, you confirm that this has been explained to you, that you
+understand it, and that you agree to let %s store copies of documents you choose
+to upload.`, OrgName, Version(), OrgAddress, OrgName)
 }

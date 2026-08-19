@@ -163,6 +163,70 @@ struct APIErrorResponse: Codable {
     let error: String
 }
 
+// MARK: - Documents
+
+enum DocumentType: String, Codable, CaseIterable, Identifiable, Equatable {
+    case governmentID = "government_id"
+    case socialSecurityCard = "social_security_card"
+    case birthCertificate = "birth_certificate"
+    case other
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .governmentID: return "Government photo ID"
+        case .socialSecurityCard: return "Social Security card"
+        case .birthCertificate: return "Birth certificate"
+        case .other: return "Other"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .governmentID: return "person.text.rectangle"
+        case .socialSecurityCard: return "creditcard"
+        case .birthCertificate: return "doc.text"
+        case .other: return "doc"
+        }
+    }
+
+    /// The core three types shown in the "what's on file" checklist.
+    /// .other is excluded — it's a catch-all label, not a single checkable item.
+    static let coreChecklist: [DocumentType] = [.governmentID, .socialSecurityCard, .birthCertificate]
+}
+
+struct DocumentMeta: Codable, Identifiable, Equatable {
+    let id: String
+    let documentType: String
+    let label: String?
+    let mimeType: String
+    let fileSizeBytes: Int
+    let createdAt: String
+
+    var type: DocumentType { DocumentType(rawValue: documentType) ?? .other }
+}
+
+struct UploadDocumentRequest: Encodable {
+    let documentType: String
+    let label: String?
+    let mimeType: String
+    let fileBase64: String
+}
+
+struct UploadDocumentResponse: Codable {
+    let document: DocumentMeta
+}
+
+struct ListDocumentsResponse: Codable {
+    let documents: [DocumentMeta]
+}
+
+struct GetDocumentResponse: Codable {
+    let document: DocumentMeta
+    let fileBase64: String
+}
+
 enum LocVaultError: LocalizedError {
     case unauthorized
     case server(String)

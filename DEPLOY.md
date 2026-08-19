@@ -55,6 +55,18 @@ Edit `.env` and set at minimum:
 - `STAFF_INVITE_CODE` — the code staff enter to register privileged accounts.
 - For HTTPS: `DOMAIN` and `TLS_EMAIL`.
 - `CORS_ORIGIN` — set to your web app's URL if you deploy the frontend (or `*`).
+- `B2_ENDPOINT` / `B2_REGION` / `B2_BUCKET` / `B2_KEY_ID` / `B2_APPLICATION_KEY` —
+  where uploaded documents are stored (Backblaze B2). Optional: if left unset,
+  documents are stored encrypted inside the container's own volume instead —
+  works fine, just without B2's offsite durability. To set up a bucket:
+  1. Create a Backblaze account and a new **private** bucket.
+  2. Open the bucket, copy its **Endpoint** — `B2_REGION` is the middle segment
+     (`https://s3.«B2_REGION».backblazeb2.com`).
+  3. **App Keys → Add a New Application Key**, scoped to just that bucket.
+     Copy `keyID` → `B2_KEY_ID` and `applicationKey` → `B2_APPLICATION_KEY`
+     (the application key is shown once — save it immediately).
+  Documents are encrypted (AES-256-GCM) before they're ever uploaded, so B2
+  itself only ever stores unreadable ciphertext.
 
 `.env` is git-ignored; never commit it.
 
