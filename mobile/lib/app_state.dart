@@ -1,16 +1,33 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'models/models.dart';
 import 'services/api_client.dart';
 import 'services/location_tracker.dart';
+import 'services/resources_controller.dart';
 import 'services/secure_storage_service.dart';
 
 /// Direct equivalent of the native app's AppState.swift: a ChangeNotifier
 /// instead of an ObservableObject, same fields, same method names.
 class AppState extends ChangeNotifier {
   final locationTracker = LocationTracker();
+
+  /// The Resources tab's content and "near you" logic. Its changes are passed
+  /// on so any screen watching AppState updates too.
+  final resources = ResourcesController();
+
+  AppState() {
+    resources.addListener(notifyListeners);
+  }
+
+  @override
+  void dispose() {
+    resources.removeListener(notifyListeners);
+    resources.dispose();
+    super.dispose();
+  }
 
   User? user;
 
@@ -42,6 +59,10 @@ class AppState extends ChangeNotifier {
   /// presence by typing on the device.
   bool isUnlocked = false;
 
+  /// True right after creating an account, until the person dismisses the
+  /// welcome card on Home.
+  bool showWelcome = false;
+
   /// True while the stored session is still being read from secure storage
   /// on cold launch — the root widget shows a splash until this clears.
   bool isInitializing = true;
@@ -50,6 +71,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> init() async {
     user = await SecureStorageService.loadUser();
+    if (user != null) hiddenDocuments = await SecureStorageService.loadHiddenDocuments(user!.id);
     apiBaseUrl = await SecureStorageService.loadApiBaseUrl();
     isInitializing = false;
     notifyListeners();
@@ -148,6 +170,45 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Switches between a participant account and a staff role. Moving into a
+  /// staff role needs the staff invite code. Returns null on success, or a
+  /// message that can be shown to the person.
+  Future<String?> changeAccountType(PersonType type, {String? staffCode}) async {
+    isSavingProfile = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final updated = await ApiClient.shared.updateProfile(
+        personType: type.name,
+        staffCode: type.isStaff ? staffCode : null,
+      );
+      user = updated;
+      await SecureStorageService.saveUser(updated);
+      if (!updated.isAdmin) {
+        analytics = null;
+        sourceReport = null;
+      }
+      if (updated.isStaff) {
+        // Staff don't share their own location; the server has also ended any sharing.
+        await locationTracker.updateConsent(granted: false);
+        consent = null;
+        consentHistory = [];
+        documents = [];
+        documentConsent = null;
+      } else {
+        locations = [];
+      }
+      await refreshSession();
+      HapticFeedback.mediumImpact();
+      return null;
+    } catch (e) {
+      return '$e';
+    } finally {
+      isSavingProfile = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> setProfilePicture(Uint8List bytes, String mimeType) async {
     isSavingProfile = true;
     errorMessage = null;
@@ -199,7 +260,10 @@ class AppState extends ChangeNotifier {
       await SecureStorageService.saveToken(response.token);
       await SecureStorageService.saveUser(response.user);
       user = response.user;
+      hiddenDocuments = {};
       isUnlocked = true; // they just proved presence by registering on this device
+      showWelcome = true;
+      HapticFeedback.mediumImpact();
       await refreshSession();
     } catch (e) {
       errorMessage = '$e';
@@ -223,6 +287,24 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// "I don't have this": takes a document off the checklist. Only for
+  /// documents that aren't on file.
+  Future<void> hideDocument(DocumentType type) async {
+    final id = user?.id;
+    if (id == null || type == DocumentType.other || documents.any((d) => d.type == type)) return;
+    hiddenDocuments = {...hiddenDocuments, type};
+    notifyListeners();
+    await SecureStorageService.saveHiddenDocuments(id, hiddenDocuments);
+  }
+
+  Future<void> unhideDocument(DocumentType type) async {
+    final id = user?.id;
+    if (id == null) return;
+    hiddenDocuments = {...hiddenDocuments}..remove(type);
+    notifyListeners();
+    await SecureStorageService.saveHiddenDocuments(id, hiddenDocuments);
+  }
+
   Future<void> grantConsent() => _updateConsent(granted: true);
 
   Future<void> revokeConsent() => _updateConsent(granted: false);
@@ -237,10 +319,40 @@ class AppState extends ChangeNotifier {
       consent = await ApiClient.shared.fetchConsentStatus();
       consentHistory = await ApiClient.shared.fetchConsentHistory();
       await locationTracker.updateConsent(granted: granted);
+      if (granted) HapticFeedback.mediumImpact();
     } catch (e) {
       errorMessage = '$e';
     }
     isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> refreshAnalytics() async {
+    if (user?.isAdmin != true) return;
+    isLoadingAnalytics = true;
+    analyticsError = null;
+    notifyListeners();
+    try {
+      analytics = await ApiClient.shared.fetchAnalytics();
+      try {
+        sourceReport = await ApiClient.shared.fetchSourceReport();
+      } catch (_) {
+        // The numbers matter more than the page-watch list; show what we have.
+      }
+    } catch (e) {
+      analyticsError = '$e';
+    }
+    isLoadingAnalytics = false;
+    notifyListeners();
+  }
+
+  /// Admin: "I checked that page; our guide is still right."
+  Future<void> markSourceReviewed(String url) async {
+    try {
+      sourceReport = await ApiClient.shared.markSourceReviewed(url);
+    } catch (e) {
+      analyticsError = '$e';
+    }
     notifyListeners();
   }
 
@@ -257,6 +369,23 @@ class AppState extends ChangeNotifier {
 
   /// Staff only: which document types each participant has on file.
   Map<String, Set<DocumentType>> documentsOnFile = {};
+
+  /// Core documents the person said they don't have. They're left off the
+  /// checklist and don't count against progress; shown again with [unhideDocument].
+  Set<DocumentType> hiddenDocuments = {};
+
+  /// The core documents this person is being asked for: everything except what
+  /// they hid — unless they've since added one anyway, which always shows.
+  List<DocumentType> get documentChecklist => [
+        for (final t in DocumentType.coreChecklist)
+          if (!hiddenDocuments.contains(t) || documents.any((d) => d.type == t)) t,
+      ];
+
+  /// Admin-only totals; null until loaded.
+  Analytics? analytics;
+  SourceReport? sourceReport;
+  bool isLoadingAnalytics = false;
+  String? analyticsError;
 
   Future<void> refreshPeople() async {
     if (!isSignedIn || user?.isStaff != true) return;
@@ -343,6 +472,7 @@ class AppState extends ChangeNotifier {
         fileBase64: base64Encode(imageBytes),
       );
       documents.insert(0, meta);
+      HapticFeedback.mediumImpact();
       return meta;
     } catch (e) {
       errorMessage = '$e';
@@ -373,6 +503,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    final id = user?.id;
+    if (id != null) await SecureStorageService.deleteHiddenDocuments(id);
+    hiddenDocuments = {};
     await locationTracker.updateConsent(granted: false);
     await SecureStorageService.clearSession();
     user = null;
@@ -381,11 +514,15 @@ class AppState extends ChangeNotifier {
     consentHistory = [];
     locations = [];
     documentsOnFile = {};
+    analytics = null;
+    sourceReport = null;
+    analyticsError = null;
     myLocations = [];
     documentConsent = null;
     documentDisclosure = null;
     documents = [];
     isUnlocked = false;
+    showWelcome = false;
     notifyListeners();
   }
 
@@ -396,6 +533,12 @@ class AppState extends ChangeNotifier {
 
   void reportError(String message) {
     errorMessage = message;
+    notifyListeners();
+  }
+
+  void dismissWelcome() {
+    if (!showWelcome) return;
+    showWelcome = false;
     notifyListeners();
   }
 

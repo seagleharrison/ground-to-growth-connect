@@ -62,6 +62,9 @@ class User {
   final bool isStaff;
   final bool hasProfilePicture;
 
+  /// Only admin accounts see organization-wide analytics.
+  bool get isAdmin => personType == 'admin';
+
   User({
     required this.id,
     required this.personType,
@@ -389,4 +392,100 @@ class GgcException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Organization-wide totals for admins. Counts only — never names, locations
+/// or document contents.
+class Analytics {
+  final int participants;
+  final int volunteers;
+  final int employees;
+  final int admins;
+  final int participantsSharing;
+  final int activeLast24Hours;
+  final int activeLast7Days;
+  final int participantsUsingStorage;
+  final int participantsWithAllThree;
+  final int documentsStored;
+  final List<AnalyticsDay> daily;
+
+  Analytics({
+    required this.participants,
+    required this.volunteers,
+    required this.employees,
+    required this.admins,
+    required this.participantsSharing,
+    required this.activeLast24Hours,
+    required this.activeLast7Days,
+    required this.participantsUsingStorage,
+    required this.participantsWithAllThree,
+    required this.documentsStored,
+    required this.daily,
+  });
+
+  factory Analytics.fromJson(Map<String, dynamic> json) {
+    final people = json['people'] as Map<String, dynamic>;
+    final sharing = json['sharing'] as Map<String, dynamic>;
+    final docs = json['documents'] as Map<String, dynamic>;
+    return Analytics(
+      participants: people['participants'] as int,
+      volunteers: people['volunteers'] as int,
+      employees: people['employees'] as int,
+      admins: people['admins'] as int,
+      participantsSharing: sharing['participantsSharing'] as int,
+      activeLast24Hours: sharing['activeLast24Hours'] as int,
+      activeLast7Days: sharing['activeLast7Days'] as int,
+      participantsUsingStorage: docs['participantsUsingStorage'] as int,
+      participantsWithAllThree: docs['participantsWithAllThree'] as int,
+      documentsStored: docs['documentsStored'] as int,
+      daily: [for (final d in (json['daily'] as List)) AnalyticsDay.fromJson(d as Map<String, dynamic>)],
+    );
+  }
+
+  int get staff => volunteers + employees + admins;
+}
+
+class AnalyticsDay {
+  final String date; // yyyy-MM-dd, Savannah time
+  final int signups;
+  final int checkIns;
+
+  AnalyticsDay({required this.date, required this.signups, required this.checkIns});
+
+  factory AnalyticsDay.fromJson(Map<String, dynamic> json) => AnalyticsDay(
+        date: json['date'] as String,
+        signups: json['signups'] as int,
+        checkIns: json['checkIns'] as int,
+      );
+}
+
+/// Admin only: official pages the Resources content points to that need a look.
+class SourceReport {
+  final int total;
+  final String? lastCheckedAt;
+  final List<SourceAttention> needsAttention;
+
+  SourceReport({required this.total, this.lastCheckedAt, required this.needsAttention});
+
+  factory SourceReport.fromJson(Map<String, dynamic> json) => SourceReport(
+        total: json['total'] as int,
+        lastCheckedAt: (json['lastCheckedAt'] as String?)?.isEmpty == true ? null : json['lastCheckedAt'] as String?,
+        needsAttention: [
+          for (final a in (json['needsAttention'] as List)) SourceAttention.fromJson(a as Map<String, dynamic>),
+        ],
+      );
+}
+
+class SourceAttention {
+  final String url;
+  final String reason;
+  final int status;
+
+  SourceAttention({required this.url, required this.reason, required this.status});
+
+  factory SourceAttention.fromJson(Map<String, dynamic> json) => SourceAttention(
+        url: json['url'] as String,
+        reason: json['reason'] as String,
+        status: json['status'] as int,
+      );
 }

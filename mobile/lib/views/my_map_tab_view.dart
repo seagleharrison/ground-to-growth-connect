@@ -28,6 +28,7 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
   MapController get mapController => _map;
 
   String? _selectedDayKey;
+  JourneyRange _range = JourneyRange.all;
   int? _selectedStop;
   LatLng? _me;
   int _lastFitDays = -1;
@@ -66,19 +67,29 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
 
   EdgeInsets get _fitPadding => EdgeInsets.fromLTRB(50, 120, 50, 330 + MediaQuery.paddingOf(context).bottom);
 
-  void _selectDay(JourneyDay? day) {
+  void _selectDay(JourneyDay day) {
     _replay
       ..stop()
       ..value = 0;
     setState(() {
-      _selectedDayKey = day?.key;
+      _selectedDayKey = day.key;
       _selectedStop = null;
     });
-    if (day != null) {
-      flyToFit(day.points, padding: _fitPadding);
-    } else {
-      flyToFit([for (final d in _days) ...d.points], padding: _fitPadding);
-    }
+    flyToFit(day.points, padding: _fitPadding);
+  }
+
+  /// Shows every day in a stretch of time (all, the past week, this month).
+  void _selectRange(JourneyRange range) {
+    _replay
+      ..stop()
+      ..value = 0;
+    setState(() {
+      _range = range;
+      _selectedDayKey = null;
+      _selectedStop = null;
+    });
+    final visible = filterByRange(_days, range, DateTime.now());
+    flyToFit([for (final d in visible) ...d.points], padding: _fitPadding);
   }
 
   void _togglePlay(JourneyDay day) {
@@ -119,13 +130,15 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
     _days = groupByLocalDay(app.myLocations);
     final days = _days;
     final selected = _dayFor(days);
+    // With no single day picked, the map shows whichever stretch of time is chosen.
+    final visible = filterByRange(days, _range, DateTime.now());
 
     // Frame all the days the first time data shows up, and again when more arrive.
     if (mapReady && days.length != _lastFitDays) {
       _lastFitDays = days.length;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && selected == null && days.isNotEmpty) {
-          flyToFit([for (final d in days) ...d.points], padding: _fitPadding);
+        if (mounted && selected == null && visible.isNotEmpty) {
+          flyToFit([for (final d in visible) ...d.points], padding: _fitPadding);
         }
       });
     }
@@ -158,7 +171,7 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
             children: [
               const AppTileLayer(),
               if (selected != null) ..._routeLayers(selected),
-              MarkerLayer(markers: _markers(days, selected)),
+              MarkerLayer(markers: _markers(selected == null ? visible : days, selected)),
             ],
           ),
 
@@ -178,12 +191,13 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        _DayChip(
-                          key: const Key('chip-all'),
-                          label: 'All days',
-                          selected: selected == null,
-                          onTap: () => _selectDay(null),
-                        ),
+                        for (final r in JourneyRange.values)
+                          _DayChip(
+                            key: Key('chip-${r.name}'),
+                            label: r.label,
+                            selected: selected == null && _range == r,
+                            onTap: () => _selectRange(r),
+                          ),
                         for (final d in days.reversed)
                           _DayChip(
                             key: Key('chip-${d.key}'),
@@ -210,7 +224,7 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
                 GlassIconButton(
                   icon: Icons.zoom_out_map_rounded,
                   tooltip: 'Show everything',
-                  onPressed: () => flyToFit(selected?.points ?? [for (final d in days) ...d.points], padding: _fitPadding),
+                  onPressed: () => flyToFit(selected?.points ?? [for (final d in visible) ...d.points], padding: _fitPadding),
                 ),
                 const SizedBox(height: 10),
                 GlassIconButton(icon: Icons.my_location_rounded, tooltip: 'Where I am now', onPressed: _locateMe, active: _me != null),
@@ -230,14 +244,14 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
             right: 14,
             bottom: safeBottom + 100,
             child: FadeSlideIn(
-              key: ValueKey('panel-${selected?.key}-${days.isEmpty}'),
+              key: ValueKey('panel-${selected?.key}-${_range.name}-${days.isEmpty}'),
               offset: 24,
               child: GlassPanel(
                 padding: const EdgeInsets.all(18),
                 child: days.isEmpty
                     ? _emptyPanel(context)
                     : selected == null
-                        ? _overviewPanel(days)
+                        ? _overviewPanel(visible)
                         : _dayPanel(selected),
               ),
             ),
@@ -421,13 +435,28 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
   }
 
   Widget _overviewPanel(List<JourneyDay> days) {
+    if (days.isEmpty) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_range.label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          const Text(
+            'No check-ins in this stretch of time. Pick another one above, or tap a day.',
+            key: Key('range-empty'),
+            style: TextStyle(color: Colors.white70, height: 1.4),
+          ),
+        ],
+      );
+    }
     final checkIns = days.fold<int>(0, (a, d) => a + d.stops);
     final distance = days.fold<double>(0, (a, d) => a + d.distanceMeters);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Your journey', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        Text(_range == JourneyRange.all ? 'Your journey' : _range.label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
         const Text('Tap a day above, or a glowing dot, to see where you went.', style: TextStyle(color: Colors.white60)),
         const SizedBox(height: 14),

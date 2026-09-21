@@ -108,4 +108,41 @@ void main() {
       expect(recencyOf(now.subtract(const Duration(hours: 5)), now: now), Recency.stale);
     });
   });
+
+  group('filterByRange', () {
+    // "Now" is Wednesday Sep 23 2026, 10:00 local.
+    final now = DateTime(2026, 9, 23, 10);
+    String utc(int m, int d, int h) => DateTime(2026, m, d, h).toUtc().toIso8601String();
+    final days = groupByLocalDay([
+      report(utc(8, 20, 9), 32.0, -81.0), // last month, more than a week ago
+      report(utc(9, 1, 9), 32.0, -81.0), // this month, but 22 days ago
+      report(utc(9, 16, 22), 32.0, -81.0), // exactly 7 days back: outside "past 7 days"
+      report(utc(9, 17, 8), 32.0, -81.0), // 6 days back: the first day inside
+      report(utc(9, 23, 8), 32.0, -81.0), // today
+    ]);
+
+    List<String> keys(JourneyRange r) => [for (final d in filterByRange(days, r, now)) d.key];
+
+    test('all keeps everything', () {
+      expect(keys(JourneyRange.all), hasLength(5));
+    });
+
+    test('past 7 days is today and the six days before it', () {
+      expect(keys(JourneyRange.week), ['2026-09-17', '2026-09-23']);
+    });
+
+    test('this month is the current calendar month only', () {
+      expect(keys(JourneyRange.month), ['2026-09-01', '2026-09-16', '2026-09-17', '2026-09-23']);
+    });
+
+    test('a window with nothing in it is simply empty', () {
+      expect(filterByRange(days, JourneyRange.week, DateTime(2027, 1, 5)), isEmpty);
+    });
+
+    test('the week window still works across a month boundary', () {
+      final early = DateTime(2026, 10, 2, 9); // the past 7 days reach back into September
+      expect(filterByRange(days, JourneyRange.week, early), isEmpty);
+      expect(filterByRange(days, JourneyRange.week, DateTime(2026, 9, 24)).map((d) => d.key), ['2026-09-23']);
+    });
+  });
 }

@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../nav.dart';
 import '../theme/app_theme.dart';
 import '../util/time.dart';
+import '../widgets/confetti.dart';
 import '../widgets/ui.dart';
 import 'documents_view.dart' show missingCoreDocuments, walletColors, walletGreen, walletIcon;
 import 'edit_profile_view.dart';
@@ -42,7 +43,7 @@ class _HomeViewState extends State<HomeView> {
     final user = app.user;
     if (user == null) return const SizedBox.shrink();
 
-    return LargeTitlePage(
+    final page = LargeTitlePage(
       title: '${greeting(DateTime.now())}, ${firstName(user.name)}',
       onRefresh: _refresh,
       actions: [
@@ -55,6 +56,10 @@ class _HomeViewState extends State<HomeView> {
         ),
       ],
       children: [
+        if (app.showWelcome) ...[
+          FadeSlideIn(child: _WelcomeCard(name: firstName(user.name), onDismiss: app.dismissWelcome)),
+          const SizedBox(height: 16),
+        ],
         FadeSlideIn(child: _SharingCard(app: app)),
         const SizedBox(height: 16),
         FadeSlideIn(delay: const Duration(milliseconds: 90), child: _GettingStartedCard(app: app)),
@@ -63,6 +68,61 @@ class _HomeViewState extends State<HomeView> {
         const SizedBox(height: 16),
         const FadeSlideIn(delay: Duration(milliseconds: 270), child: _PrivacyPromise()),
       ],
+    );
+
+    // A little celebration the first time someone lands after creating their account.
+    return Stack(
+      children: [
+        page,
+        if (app.showWelcome) const Positioned.fill(child: ConfettiBurst()),
+      ],
+    );
+  }
+}
+
+// MARK: - Welcome
+
+class _WelcomeCard extends StatelessWidget {
+  final String name;
+  final VoidCallback onDismiss;
+  const _WelcomeCard({required this.name, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      key: const Key('welcome-card'),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Brand.orangeDeep.withValues(alpha: 0.30), Brand.surface],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.celebration_rounded, color: Brand.orange, size: 26),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Welcome, $name!', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            "You're in. Everything here is private and yours. There's no password to remember — "
+            'next time, just look at your phone to open the app.',
+            style: TextStyle(color: Colors.white70, height: 1.4, fontSize: 15),
+          ),
+          const SizedBox(height: 14),
+          TextButton(
+            key: const Key('welcome-dismiss'),
+            onPressed: onDismiss,
+            style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+            child: const Text("Let's go", style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -177,7 +237,7 @@ class _GettingStartedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final sharingDone = app.consent?.granted == true;
     final docsGranted = app.documentConsent?.granted == true;
-    final docsDone = docsGranted && missingCoreDocuments(app.documents).isEmpty;
+    final docsDone = docsGranted && missingCoreDocuments(app.documents, hidden: app.hiddenDocuments).isEmpty;
     final photoDone = app.user?.hasProfilePicture == true;
     final done = [sharingDone, docsDone, photoDone].where((d) => d).length;
 
@@ -258,7 +318,7 @@ class _GettingStartedCard extends StatelessWidget {
             icon: Icons.account_balance_wallet_rounded,
             title: 'Add your documents',
             subtitle: docsGranted
-                ? '${3 - missingCoreDocuments(app.documents).length} of 3 on file'
+                ? '${app.documentChecklist.length - missingCoreDocuments(app.documents, hidden: app.hiddenDocuments).length} of ${app.documentChecklist.length} on file'
                 : 'ID, Social Security card, birth certificate',
             done: docsDone,
             onTap: docsDone ? null : () => context.read<TabNav>().go(AppTab.documents),
@@ -343,7 +403,8 @@ class _DocumentsPeek extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final granted = app.documentConsent?.granted == true;
-    final missing = missingCoreDocuments(app.documents);
+    final missing = missingCoreDocuments(app.documents, hidden: app.hiddenDocuments);
+    final checklist = app.documentChecklist;
 
     return AppCard(
       onTap: () => context.read<TabNav>().go(AppTab.documents),
@@ -354,7 +415,7 @@ class _DocumentsPeek extends StatelessWidget {
             children: [
               const Expanded(child: Text('Your documents', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
               Text(
-                granted ? '${3 - missing.length} of 3 on file' : 'Not started',
+                granted ? (checklist.isEmpty ? 'Nothing left on your list' : '${checklist.length - missing.length} of ${checklist.length} on file') : 'Not started',
                 style: TextStyle(color: granted && missing.isEmpty ? walletGreen : Colors.white54, fontSize: 13),
               ),
               const Icon(Icons.chevron_right_rounded, color: Colors.white38),
@@ -368,12 +429,15 @@ class _DocumentsPeek extends StatelessWidget {
             style: const TextStyle(color: Colors.white60, height: 1.35),
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              for (final type in DocumentType.coreChecklist)
-                Expanded(child: _MiniCard(type: type, onFile: granted && !missing.contains(type))),
-            ],
-          ),
+          if (checklist.isNotEmpty) ...[
+            const SizedBox(height: 0),
+            Row(
+              children: [
+                for (final type in checklist)
+                  Expanded(child: _MiniCard(type: type, onFile: granted && !missing.contains(type))),
+              ],
+            ),
+          ],
         ],
       ),
     );

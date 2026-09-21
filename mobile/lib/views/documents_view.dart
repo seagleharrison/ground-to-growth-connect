@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
@@ -10,6 +10,7 @@ import '../services/api_client.dart';
 import '../services/biometric_auth.dart';
 import '../services/document_scanner_service.dart';
 import '../theme/app_theme.dart';
+import 'resources_view.dart' show DocumentGuidesView;
 import '../widgets/confetti.dart';
 import '../widgets/ui.dart';
 
@@ -69,7 +70,8 @@ class _DocumentsViewState extends State<DocumentsView> {
   }
 
   List<Widget> _documentsChildren(BuildContext context, AppState app) {
-    final missing = missingCoreDocuments(app.documents);
+    final missing = missingCoreDocuments(app.documents, hidden: app.hiddenDocuments);
+    final checklistSize = app.documentChecklist.length;
     return [
       const FadeSlideIn(
         child: Padding(
@@ -85,7 +87,7 @@ class _DocumentsViewState extends State<DocumentsView> {
       if (missing.isNotEmpty) ...[
         GradientButton(
           icon: Icons.document_scanner_rounded,
-          label: missing.length == DocumentType.coreChecklist.length
+          label: missing.length == checklistSize
               ? 'Start: ${missing.first.label}'
               : 'Next: ${missing.first.label}',
           onPressed: () => _openWizard(startAt: missing.first),
@@ -100,13 +102,36 @@ class _DocumentsViewState extends State<DocumentsView> {
             children: [
               Icon(Icons.verified_rounded, color: walletGreen, size: 28),
               SizedBox(width: 12),
-              Expanded(child: Text("All three documents are on file. You're all set.", style: TextStyle(fontWeight: FontWeight.w600, height: 1.35))),
+              Expanded(child: Text("Everything on your list is on file. You're all set.", style: TextStyle(fontWeight: FontWeight.w600, height: 1.35))),
             ],
           ),
         ),
         const SizedBox(height: 10),
         OutlinedButton(onPressed: () => _openWizard(), child: const Text('Add another document')),
       ],
+      const SizedBox(height: 16),
+      AppCard(
+        key: const Key('replace-guides-card'),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DocumentGuidesView())),
+        child: const Row(
+          children: [
+            Icon(Icons.find_replace_rounded, color: Brand.orange),
+            SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Lost a document?', style: TextStyle(fontWeight: FontWeight.w700)),
+                  SizedBox(height: 2),
+                  Text('See how to replace it, step by step', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: Colors.white38),
+          ],
+        ),
+      ),
       if (app.documents.isNotEmpty) ...[
         const SizedBox(height: 28),
         const SectionLabel('All documents'),
@@ -143,12 +168,14 @@ class _DocumentsViewState extends State<DocumentsView> {
   /// the right means it's on file; an empty circle means it's still needed.
   /// Tapping a card adds that document, or opens it if it's already on file.
   Widget _checklistCard(BuildContext context, AppState app) {
-    final total = DocumentType.coreChecklist.length;
-    final done = total - missingCoreDocuments(app.documents).length;
+    final checklist = app.documentChecklist;
+    final total = checklist.length;
+    final done = total - missingCoreDocuments(app.documents, hidden: app.hiddenDocuments).length;
 
     const cardHeight = 176.0;
-    const peek = 84.0; // how much of each card shows above the next one
-    final stackHeight = peek * (total - 1) + cardHeight;
+    const peek = 96.0; // how much of each card shows above the next one
+    final stackHeight = total == 0 ? 0.0 : peek * (total - 1) + cardHeight;
+    final hidden = [for (final t in DocumentType.coreChecklist) if (!checklist.contains(t)) t];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,8 +185,8 @@ class _DocumentsViewState extends State<DocumentsView> {
             const Text('Your documents', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const Spacer(),
             Text(
-              '$done of $total on file',
-              style: TextStyle(color: done == total ? walletGreen : Colors.grey, fontSize: 13),
+              total == 0 ? 'Nothing left on your list' : '$done of $total on file',
+              style: TextStyle(color: total > 0 && done == total ? walletGreen : Colors.grey, fontSize: 13),
             ),
           ],
         ),
@@ -168,7 +195,7 @@ class _DocumentsViewState extends State<DocumentsView> {
           height: stackHeight,
           child: Stack(
             children: [
-              for (final (index, type) in DocumentType.coreChecklist.indexed)
+              for (final (index, type) in checklist.indexed)
                 Positioned(
                   top: index * peek,
                   left: 0,
@@ -179,7 +206,38 @@ class _DocumentsViewState extends State<DocumentsView> {
             ],
           ),
         ),
+        if (hidden.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _hiddenDocuments(app, hidden),
+        ],
       ],
+    );
+  }
+
+  /// The documents the person said they don't have, each with a way back.
+  Widget _hiddenDocuments(AppState app, List<DocumentType> hidden) {
+    return AppCard(
+      key: const Key('hidden-documents'),
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Hidden — you said you don\'t have these', style: TextStyle(color: Colors.white60, fontSize: 13)),
+          for (final type in hidden)
+            Row(
+              children: [
+                Icon(walletIcon(type), size: 20, color: Colors.white54),
+                const SizedBox(width: 12),
+                Expanded(child: Text(type.label, style: const TextStyle(color: Colors.white70, fontSize: 15))),
+                TextButton(
+                  key: Key('unhide-${type.wireValue}'),
+                  onPressed: () => app.unhideDocument(type),
+                  child: const Text('Show again', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 
@@ -243,16 +301,46 @@ class _DocumentsViewState extends State<DocumentsView> {
                       _statusCircle(onFile),
                     ],
                   ),
-                  const Spacer(),
-                  Text(
-                    onFile ? 'On file · ${docs.first.createdAt.substring(0, 10)}' : 'Not added yet · tap to add',
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          onFile ? 'On file · ${docs.first.createdAt.substring(0, 10)}' : 'Not added yet · tap to add',
+                          style: const TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
+                      ),
+                      if (!onFile) _dontHaveChip(app, type),
+                    ],
                   ),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// "I don't have this" — takes the card off the list so nothing nags about it.
+  Widget _dontHaveChip(AppState app, DocumentType type) {
+    return GestureDetector(
+      key: Key('hide-${type.wireValue}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        app.hideDocument(type);
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text('${type.label} hidden. You can bring it back below.'),
+            action: SnackBarAction(label: 'Undo', onPressed: () => app.unhideDocument(type)),
+          ));
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.28), borderRadius: BorderRadius.circular(16)),
+        child: const Text("I don't have this", style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -412,9 +500,12 @@ IconData walletIcon(DocumentType type) => switch (type) {
     };
 
 /// Which of the three core documents still aren't on file, in checklist order.
-List<DocumentType> missingCoreDocuments(List<DocumentMeta> documents) => [
+///
+/// Documents the person marked "I don't have this" ([hidden]) aren't counted:
+/// nothing is asked of them for those.
+List<DocumentType> missingCoreDocuments(List<DocumentMeta> documents, {Set<DocumentType> hidden = const {}}) => [
       for (final type in DocumentType.coreChecklist)
-        if (!documents.any((d) => d.type == type)) type,
+        if (!hidden.contains(type) && !documents.any((d) => d.type == type)) type,
     ];
 
 /// One line of plain-language help shown while scanning each document.
@@ -713,7 +804,8 @@ class _UploadSuccessStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
-    final missing = missingCoreDocuments(app.documents);
+    final missing = missingCoreDocuments(app.documents, hidden: app.hiddenDocuments);
+    final checklist = app.documentChecklist;
     final allDone = missing.isEmpty;
 
     return Stack(
@@ -758,11 +850,11 @@ class _UploadSuccessStep extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    allDone ? 'All done' : '${DocumentType.coreChecklist.length - missing.length} of ${DocumentType.coreChecklist.length} on file',
+                    allDone ? 'All done' : '${checklist.length - missing.length} of ${checklist.length} on file',
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
                   ),
                   const SizedBox(height: 10),
-                  for (final type in DocumentType.coreChecklist)
+                  for (final type in checklist)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 5),
                       child: Row(

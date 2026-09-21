@@ -33,6 +33,12 @@ class AppTileLayer extends StatelessWidget {
       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       userAgentPackageName: 'com.harrison.groundtogrowth',
       tileBuilder: naturalDarkTileBuilder,
+      // Phone screens pack 2-3 pixels into every point, so plain 256px tiles get
+      // stretched and look soft. On those screens, load the next zoom level and
+      // draw it at half size: street names and outlines stay crisp.
+      retinaMode: RetinaMode.isHighDensity(context),
+      // Keep a wider ring of tiles loaded so panning doesn't reveal blank squares.
+      panBuffer: 2,
     );
   }
 }

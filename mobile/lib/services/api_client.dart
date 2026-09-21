@@ -31,8 +31,16 @@ class ApiClient {
 
   /// Edits the signed-in user's own details. Only the fields passed are sent;
   /// an empty string clears an optional field (email, phone, gender), and a
-  /// null field is left unchanged on the server.
-  Future<User> updateProfile({String? name, String? email, String? phone, String? gender}) async {
+  /// null field is left unchanged on the server. Passing a [personType] changes
+  /// the account type; moving to a staff role also needs the [staffCode].
+  Future<User> updateProfile({
+    String? name,
+    String? email,
+    String? phone,
+    String? gender,
+    String? personType,
+    String? staffCode,
+  }) async {
     final json = await _request(
       path: '/api/me',
       method: 'PATCH',
@@ -41,6 +49,8 @@ class ApiClient {
         'email': ?email,
         'phone': ?phone,
         'gender': ?gender,
+        'personType': ?personType,
+        'staffCode': ?staffCode,
       },
     );
     return User.fromJson(json['user'] as Map<String, dynamic>);
@@ -185,6 +195,41 @@ class ApiClient {
     };
   }
 
+  /// Admin only. Organization-wide totals.
+  Future<Analytics> fetchAnalytics() async {
+    final json = await _request(path: '/api/analytics');
+    return Analytics.fromJson(json);
+  }
+
+  /// The Resources content. Public (no sign-in). Pass the [etag] of the copy you
+  /// already have and an unchanged server answers "not modified" with no body.
+  Future<({int status, String? body, String? etag})> fetchResources({String? etag}) async {
+    final base = (await _baseUrl).replaceAll(RegExp(r'/+$'), '');
+    final response = await http
+        .get(Uri.parse('$base/api/resources'), headers: {
+          'User-Agent': 'GroundToGrowthConnect-Flutter/0.1',
+          'If-None-Match': ?etag,
+        })
+        .timeout(const Duration(seconds: 15));
+    return (
+      status: response.statusCode,
+      body: response.statusCode == 200 ? response.body : null,
+      etag: response.headers['etag'],
+    );
+  }
+
+  /// Admin only. Official pages the Resources content points to that vanished or changed.
+  Future<SourceReport> fetchSourceReport() async {
+    final json = await _request(path: '/api/analytics/sources');
+    return SourceReport.fromJson(json);
+  }
+
+  /// Admin only. "I checked it; the guide is still right."
+  Future<SourceReport> markSourceReviewed(String url) async {
+    final json = await _request(path: '/api/analytics/sources/reviewed', method: 'POST', body: {'url': url});
+    return SourceReport.fromJson(json);
+  }
+
   Future<GetDocumentResponse> fetchDocument(String id) async {
     final json = await _request(path: '/api/documents/$id', timeout: const Duration(seconds: 60));
     return GetDocumentResponse.fromJson(json);
@@ -228,7 +273,7 @@ class ApiClient {
       final streamed = await request.send().timeout(timeout);
       response = await http.Response.fromStream(streamed);
     } catch (error) {
-      throw GgcException('Network error: $error');
+      throw GgcException(_couldntReachServer);
     }
 
     if (response.statusCode == 401) {
@@ -238,11 +283,11 @@ class ApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       try {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        throw GgcException(decoded['error'] as String? ?? 'Request failed (${response.statusCode}).');
+        throw GgcException(_friendlyServerMessage(decoded['error'] as String?, response.statusCode));
       } on GgcException {
         rethrow;
       } catch (_) {
-        throw GgcException('Request failed (${response.statusCode}).');
+        throw GgcException(_friendlyServerMessage(null, response.statusCode));
       }
     }
 
@@ -250,7 +295,29 @@ class ApiClient {
     try {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } catch (_) {
-      throw GgcException('Unexpected response from server.');
+      throw GgcException(_somethingWentWrong);
     }
   }
+}
+
+const _couldntReachServer =
+    "We can't reach Ground to Growth right now. Check your signal or Wi-Fi and try again in a moment.";
+const _somethingWentWrong = 'Something went wrong on our end. Please try again in a moment.';
+
+/// Turns the server's terse messages into something a person would want to read.
+String _friendlyServerMessage(String? raw, int status) {
+  final message = raw?.trim() ?? '';
+  if (message.startsWith('A valid staff invite code')) {
+    return "That staff code doesn't look right. Please double-check it with Ground to Growth and try again.";
+  }
+  if (message == 'Internal server error' || status >= 500) return _somethingWentWrong;
+  if (message.contains('file too large')) {
+    return 'That file is too big. Try taking the photo again a little closer, or in better light.';
+  }
+  if (message == 'Staff access required') return 'That part of the app is only for Ground to Growth staff.';
+  if (message.isEmpty || RegExp(r'^[a-zA-Z]+ (is|are|must|cannot)\b').hasMatch(message)) {
+    // Technical validation text ("mimeType must be one of...") isn't helpful to read.
+    return message.startsWith('name') ? 'Please enter your name.' : _somethingWentWrong;
+  }
+  return message;
 }

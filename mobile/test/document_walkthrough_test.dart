@@ -148,7 +148,7 @@ void main() {
     expect(_onFile, findsNWidgets(3));
     expect(_needed, findsNothing);
     expect(find.text('3 of 3 on file'), findsOneWidget);
-    expect(find.text("All three documents are on file. You're all set."), findsOneWidget);
+    expect(find.text("Everything on your list is on file. You're all set."), findsOneWidget);
     expect(find.textContaining('Start:'), findsNothing);
 
     expect([for (final u in api.uploadBodies) u['documentType']],
@@ -207,7 +207,7 @@ void main() {
     await tester.pumpAndSettle();
     await _choosePhotoAndWaitForUploads(tester, api, expectedUploads: 1);
 
-    expect(find.text('Invalid JSON body, or file too large'), findsOneWidget);
+    expect(find.textContaining('That file is too big'), findsOneWidget);
     expect(find.text('Choose from photos'), findsOneWidget, reason: 'still on the scan step so they can retry');
     expect(find.textContaining('saved'), findsNothing);
 

@@ -47,6 +47,30 @@ List<JourneyDay> groupByLocalDay(List<MyLocationReport> reports) {
   return days;
 }
 
+/// Which stretch of time the map shows when no single day is picked.
+enum JourneyRange {
+  all('All days'),
+  week('Past 7 days'),
+  month('This month');
+
+  final String label;
+  const JourneyRange(this.label);
+}
+
+/// The days that fall inside [range], as of [now]. "Past 7 days" means today
+/// and the six days before it; "This month" means the current calendar month.
+List<JourneyDay> filterByRange(List<JourneyDay> days, JourneyRange range, DateTime now) {
+  switch (range) {
+    case JourneyRange.all:
+      return days;
+    case JourneyRange.week:
+      final cutoff = DateTime(now.year, now.month, now.day - 6);
+      return [for (final d in days) if (!d.date.isBefore(cutoff)) d];
+    case JourneyRange.month:
+      return [for (final d in days) if (d.date.year == now.year && d.date.month == now.month) d];
+  }
+}
+
 const _earthRadiusMeters = 6371000.0;
 
 double haversineMeters(LatLng a, LatLng b) {

@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'nav.dart';
 import 'theme/app_theme.dart';
+import 'util/time.dart';
+import 'widgets/ui.dart';
 import 'services/biometric_auth.dart';
 import 'views/main_tab_view.dart';
 import 'views/register_view.dart';
@@ -60,8 +62,12 @@ class _RootViewState extends State<RootView> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Re-lock whenever the app leaves the foreground, so returning to it
     // (even briefly backgrounded) requires Face ID again.
+    final app = context.read<AppState>();
     if (state == AppLifecycleState.paused) {
-      context.read<AppState>().setUnlocked(false);
+      app.setUnlocked(false);
+    } else if (state == AppLifecycleState.resumed && app.isSignedIn) {
+      // Coming back to the app: make sure the Resources info is still current.
+      app.resources.refreshIfStale();
     }
   }
 
@@ -144,28 +150,49 @@ class _LockedViewState extends State<LockedView> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final name = context.select<AppState, String?>((a) => a.user?.name);
+    final first = name == null || name.trim().isEmpty ? null : firstName(name);
     return Scaffold(
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.face_retouching_natural, size: 56, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 20),
-            const Text('Ground to Growth Connect is locked', style: TextStyle(fontWeight: FontWeight.w600)),
-            if (_authError != null) ...[
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  gradient: Brand.heroGradient,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [BoxShadow(color: Brand.orangeDeep.withValues(alpha: 0.4), blurRadius: 32, offset: const Offset(0, 12))],
+                ),
+                child: const Icon(Icons.face_rounded, size: 52, color: Color(0xFF3A1D00)),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                first == null ? 'Welcome back' : 'Welcome back, $first',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Look at your phone to open the app.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white60, fontSize: 16),
+              ),
+              if (_authError != null) ...[
+                const SizedBox(height: 14),
+                Text(
                   _authError!,
-                  style: const TextStyle(color: Colors.red, fontSize: 13),
+                  style: const TextStyle(color: Brand.amber, fontSize: 14),
                   textAlign: TextAlign.center,
                 ),
-              ),
+              ],
+              const SizedBox(height: 28),
+              GradientButton(label: 'Unlock', icon: Icons.lock_open_rounded, onPressed: _unlock),
             ],
-            const SizedBox(height: 20),
-            FilledButton(onPressed: _unlock, child: const Text('Unlock')),
-          ],
+          ),
         ),
       ),
     );

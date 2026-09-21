@@ -151,7 +151,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Edit profile'), findsOneWidget, reason: 'must not close on failure');
-    expect(find.textContaining('name cannot be empty'), findsOneWidget);
+    expect(find.text('Please enter your name.'), findsOneWidget, reason: 'the server\'s terse message is shown in plain words');
     expect(_fieldText(tester, 0), 'Someone Else', reason: "the person's typing must not be lost");
   });
 

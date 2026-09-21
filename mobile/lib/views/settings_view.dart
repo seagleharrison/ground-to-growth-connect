@@ -5,6 +5,7 @@ import '../app_state.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ui.dart';
+import 'account_type_sheet.dart';
 import 'edit_profile_view.dart';
 import 'profile_avatar.dart';
 
@@ -51,6 +52,33 @@ class _SettingsViewState extends State<SettingsView> {
                 child: Column(children: _contactRows(app)),
               ),
             ),
+          const SizedBox(height: 12),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 110),
+            child: AppCard(
+              key: const Key('account-type-row'),
+              onTap: () => showAccountTypeSheet(context),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.swap_horiz_rounded, color: Brand.orange),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Account type', style: TextStyle(fontWeight: FontWeight.w700)),
+                        SizedBox(height: 2),
+                        Text('Switch between getting support and staff', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
         ],
 

@@ -46,6 +46,34 @@ class SecureStorageService {
   static Future<String> loadApiBaseUrl() async =>
       await _storage.read(key: _apiUrlKey) ?? defaultApiBaseUrl;
 
+  /// Documents this person marked "I don't have this", remembered on this phone
+  /// only. It's just a display preference, so it isn't sent to the server.
+  static String _hiddenKey(String userId) => 'hidden_documents_$userId';
+
+  static Future<void> saveHiddenDocuments(String userId, Set<DocumentType> hidden) =>
+      _storage.write(key: _hiddenKey(userId), value: [for (final t in hidden) t.wireValue].join(','));
+
+  static Future<Set<DocumentType>> loadHiddenDocuments(String userId) async {
+    final raw = await _storage.read(key: _hiddenKey(userId));
+    if (raw == null || raw.isEmpty) return {};
+    return {for (final w in raw.split(',')) DocumentType.fromWire(w)}..remove(DocumentType.other);
+  }
+
+  static Future<void> deleteHiddenDocuments(String userId) => _storage.delete(key: _hiddenKey(userId));
+
+  /// The last Resources content fetched from the server, so it still shows
+  /// (and is the newest we have) when there's no signal.
+  static Future<void> saveResourcesCache({required String json, String? etag}) async {
+    await _storage.write(key: 'resources_json', value: json);
+    if (etag != null) await _storage.write(key: 'resources_etag', value: etag);
+  }
+
+  static Future<({String json, String? etag})?> loadResourcesCache() async {
+    final json = await _storage.read(key: 'resources_json');
+    if (json == null) return null;
+    return (json: json, etag: await _storage.read(key: 'resources_etag'));
+  }
+
   static Future<void> clearSession() async {
     await deleteToken();
     await deleteUser();
