@@ -43,6 +43,10 @@ func NewServer(db *sql.DB, docs blobstore.Store) http.Handler {
 
 	mux.HandleFunc("POST /api/users", s.handleRegister)
 	mux.HandleFunc("GET /api/me", s.withAuth(s.handleMe))
+	mux.HandleFunc("PATCH /api/me", s.withAuth(s.handleUpdateProfile))
+	mux.HandleFunc("PUT /api/me/picture", s.withAuth(s.handlePutProfilePicture))
+	mux.HandleFunc("GET /api/me/picture", s.withAuth(s.handleGetProfilePicture))
+	mux.HandleFunc("DELETE /api/me/picture", s.withAuth(s.handleDeleteProfilePicture))
 	mux.HandleFunc("DELETE /api/account", s.withAuth(s.handleDeleteAccount))
 
 	mux.HandleFunc("GET /api/consent/disclosure", s.handleDisclosure)
@@ -94,9 +98,22 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+		// Routes that accept real files apply their own, larger cap inside the
+		// handler. They must be exempt here: wrapping a MaxBytesReader inside
+		// another one leaves the smaller limit in force, so a route that only
+		// re-wraps would still reject anything over 16kb.
+		if !hasLargeBody(r) {
+			r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// hasLargeBody reports whether the request is to a route that carries a file
+// (a scanned document or a profile picture) rather than a small JSON payload.
+func hasLargeBody(r *http.Request) bool {
+	return (r.Method == http.MethodPost && r.URL.Path == "/api/documents") ||
+		(r.Method == http.MethodPut && r.URL.Path == "/api/me/picture")
 }
 
 func setSecurityHeaders(w http.ResponseWriter) {
@@ -117,7 +134,7 @@ func setSecurityHeaders(w http.ResponseWriter) {
 // Requests with no Origin header (e.g. the iOS app) are always allowed.
 func (s *Server) applyCORS(w http.ResponseWriter, r *http.Request) bool {
 	origin := r.Header.Get("Origin")
-	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,DELETE,OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 	if s.corsWildcard {

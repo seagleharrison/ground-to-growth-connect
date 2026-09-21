@@ -25,6 +25,14 @@ const testStaffCode = "test-staff-code"
 // access (e.g. to check an audit log row).
 func setupTestServer(t *testing.T) (http.Handler, *sql.DB) {
 	t.Helper()
+	h, db, _ := setupTestServerWithStore(t)
+	return h, db
+}
+
+// setupTestServerWithStore is setupTestServer plus the blob store, for tests
+// that need to check what is (or isn't) left in it.
+func setupTestServerWithStore(t *testing.T) (http.Handler, *sql.DB, blobstore.Store) {
+	t.Helper()
 	t.Setenv("ENCRYPTION_KEY", testEncryptionKey)
 	t.Setenv("STAFF_INVITE_CODE", testStaffCode)
 	t.Setenv("CORS_ORIGIN", "http://localhost:5173")
@@ -50,7 +58,7 @@ func setupTestServer(t *testing.T) (http.Handler, *sql.DB) {
 		t.Fatalf("blobstore.NewLocalDiskStore: %v", err)
 	}
 
-	return NewServer(db, docs), db
+	return NewServer(db, docs), db, docs
 }
 
 func newTestServer(t *testing.T) http.Handler {

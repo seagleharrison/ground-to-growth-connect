@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -70,6 +71,8 @@ type userProfile struct {
 	Gender     *string `json:"gender"`
 	Phone      *string `json:"phone"`
 	IsStaff    bool    `json:"isStaff"`
+
+	HasProfilePicture bool `json:"hasProfilePicture"`
 }
 
 func profileFromUser(u *authUser) (*userProfile, error) {
@@ -97,6 +100,8 @@ func profileFromUser(u *authUser) (*userProfile, error) {
 		Gender:     gender,
 		Phone:      phone,
 		IsStaff:    isStaff(u.PersonType),
+
+		HasProfilePicture: u.ProfilePictureKey.Valid,
 	}, nil
 }
 
@@ -224,9 +229,43 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	u := userFromCtx(r)
+
+	// Collect every stored file before the rows that point at them are gone.
+	// Deleting only the database rows would leave the encrypted files behind
+	// in the blob store, which is not what "delete my data" promises.
+	var blobKeys []string
+	rows, err := s.db.Query(`SELECT storage_key FROM documents WHERE user_id = ?`, u.ID)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			rows.Close()
+			writeInternalError(w, err)
+			return
+		}
+		blobKeys = append(blobKeys, key)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if u.ProfilePictureKey.Valid {
+		blobKeys = append(blobKeys, u.ProfilePictureKey.String)
+	}
+
 	if _, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, u.ID); err != nil {
 		writeInternalError(w, err)
 		return
+	}
+
+	for _, key := range blobKeys {
+		if err := s.docs.Delete(r.Context(), key); err != nil {
+			log.Printf("orphaned blob %s after account deletion: %v", key, err)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }

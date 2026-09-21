@@ -19,6 +19,11 @@ CREATE TABLE IF NOT EXISTS users (
   email_encrypted BLOB,
   gender_encrypted BLOB,
   phone_encrypted BLOB,
+  -- Optional profile picture: the image itself is encrypted and lives in the
+  -- blob store (same as documents); only its key and mime type are kept here.
+  -- Older databases get these columns via dbstore.Migrate.
+  profile_picture_key TEXT,
+  profile_picture_mime TEXT,
   token_hash TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );

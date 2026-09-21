@@ -27,6 +27,10 @@ type authUser struct {
 	EmailEncrypted  []byte
 	GenderEncrypted []byte
 	PhoneEncrypted  []byte
+
+	// Set once the user has uploaded a profile picture.
+	ProfilePictureKey  sql.NullString
+	ProfilePictureMime sql.NullString
 }
 
 type ctxKey int
@@ -51,10 +55,12 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 
 		var u authUser
 		err := s.db.QueryRow(
-			`SELECT id, person_type, name_encrypted, email_encrypted, gender_encrypted, phone_encrypted
+			`SELECT id, person_type, name_encrypted, email_encrypted, gender_encrypted, phone_encrypted,
+			        profile_picture_key, profile_picture_mime
 			 FROM users WHERE token_hash = ?`,
 			tokenHash,
-		).Scan(&u.ID, &u.PersonType, &u.NameEncrypted, &u.EmailEncrypted, &u.GenderEncrypted, &u.PhoneEncrypted)
+		).Scan(&u.ID, &u.PersonType, &u.NameEncrypted, &u.EmailEncrypted, &u.GenderEncrypted, &u.PhoneEncrypted,
+			&u.ProfilePictureKey, &u.ProfilePictureMime)
 		if err == sql.ErrNoRows {
 			writeError(w, http.StatusUnauthorized, "Invalid token")
 			return
