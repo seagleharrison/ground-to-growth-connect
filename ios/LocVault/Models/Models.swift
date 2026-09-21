@@ -159,6 +159,23 @@ struct LatestLocationsResponse: Codable {
     let locations: [UserLocation]
 }
 
+/// A participant's own reported location — no userId/name/personType, since
+/// this always refers to whoever is asking. Used for the participant's own
+/// map, distinct from UserLocation (which staff see, for every consented
+/// participant).
+struct MyLocationReport: Codable, Identifiable {
+    let latitude: Double
+    let longitude: Double
+    let accuracyMeters: Double?
+    let reportedAt: String
+
+    var id: String { reportedAt }
+}
+
+struct MyLocationsResponse: Codable {
+    let reports: [MyLocationReport]
+}
+
 struct APIErrorResponse: Codable {
     let error: String
 }

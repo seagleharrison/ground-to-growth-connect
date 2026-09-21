@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 71;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -21,6 +21,8 @@
 		B10000000000000000000012 /* DocumentScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000013 /* DocumentScanner.swift */; };
 		B10000000000000000000013 /* DocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000014 /* DocumentsView.swift */; };
 		B10000000000000000000014 /* BiometricAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000015 /* BiometricAuth.swift */; };
+		B10000000000000000000015 /* MyMapTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000016 /* MyMapTabView.swift */; };
+		B10000000000000000000016 /* MapRegionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000017 /* MapRegionHelper.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +42,8 @@
 		F10000000000000000000013 /* DocumentScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScanner.swift; sourceTree = "<group>"; };
 		F10000000000000000000014 /* DocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsView.swift; sourceTree = "<group>"; };
 		F10000000000000000000015 /* BiometricAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricAuth.swift; sourceTree = "<group>"; };
+		F10000000000000000000016 /* MyMapTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyMapTabView.swift; sourceTree = "<group>"; };
+		F10000000000000000000017 /* MapRegionHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapRegionHelper.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -56,12 +60,12 @@
 		G10000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				G10000000000000000000002 /* App */,
+				G10000000000000000000002 /* Ground to Growth Connect */,
 				G10000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		G10000000000000000000002 /* App */ = {
+		G10000000000000000000002 /* Ground to Growth Connect */ = {
 			isa = PBXGroup;
 			children = (
 				F10000000000000000000001 /* GroundToGrowthConnectApp.swift */,
@@ -112,6 +116,8 @@
 				F10000000000000000000009 /* MapTabView.swift */,
 				F10000000000000000000010 /* SettingsView.swift */,
 				F10000000000000000000014 /* DocumentsView.swift */,
+				F10000000000000000000016 /* MyMapTabView.swift */,
+				F10000000000000000000017 /* MapRegionHelper.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -198,6 +204,8 @@
 				B10000000000000000000012 /* DocumentScanner.swift in Sources */,
 				B10000000000000000000013 /* DocumentsView.swift in Sources */,
 				B10000000000000000000014 /* BiometricAuth.swift in Sources */,
+				B10000000000000000000015 /* MyMapTabView.swift in Sources */,
+				B10000000000000000000016 /* MapRegionHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -256,7 +264,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = U8DM4F88TC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LocVault/Info.plist;
@@ -284,7 +292,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = U8DM4F88TC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LocVault/Info.plist;

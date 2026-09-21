@@ -74,6 +74,11 @@ final class APIClient {
         return response.locations
     }
 
+    func fetchMyLocations() async throws -> [MyLocationReport] {
+        let response: MyLocationsResponse = try await request(path: "/api/locations/mine")
+        return response.reports
+    }
+
     // MARK: - Document storage consent
 
     func fetchDocumentDisclosure() async throws -> DisclosureResponse {

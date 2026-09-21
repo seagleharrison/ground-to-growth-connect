@@ -16,6 +16,11 @@ final class AppState: ObservableObject {
     @Published var documents: [DocumentMeta] = []
     @Published var isUploadingDocument = false
 
+    /// A participant's own location history — never other participants',
+    /// which is what keeps this distinct from `locations` (the staff-only
+    /// everyone view).
+    @Published var myLocations: [MyLocationReport] = []
+
     /// Gates the whole signed-in app behind Face ID/passcode. Starts locked
     /// on cold launch for a returning session; set true directly after a
     /// fresh in-session registration (see register()) since the person just
@@ -128,6 +133,15 @@ final class AppState: ObservableObject {
         }
     }
 
+    func refreshMyLocations() async {
+        guard isSignedIn else { return }
+        do {
+            myLocations = try await APIClient.shared.fetchMyLocations()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     // MARK: - Document storage
 
     func refreshDocumentConsent() async {
@@ -211,6 +225,7 @@ final class AppState: ObservableObject {
         consent = nil
         consentHistory = []
         locations = []
+        myLocations = []
         documentConsent = nil
         documentDisclosure = nil
         documents = []
