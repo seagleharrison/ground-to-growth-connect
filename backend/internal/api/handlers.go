@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -107,6 +108,17 @@ func profileFromUser(u *authUser) (*userProfile, error) {
 
 // --- users ---
 
+// validStaffCode reports whether code matches the invite code that lets
+// someone hold a staff account. It is the single gate for both signing up as
+// staff and switching an existing account to a staff role.
+func validStaffCode(code string) bool {
+	invite := os.Getenv("STAFF_INVITE_CODE")
+	if invite == "" {
+		invite = "g2g-staff"
+	}
+	return subtle.ConstantTimeCompare([]byte(code), []byte(invite)) == 1
+}
+
 type registerRequest struct {
 	Name       string `json:"name"`
 	Email      string `json:"email"`
@@ -142,11 +154,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	staffInvite := os.Getenv("STAFF_INVITE_CODE")
-	if staffInvite == "" {
-		staffInvite = "g2g-staff"
-	}
-	if isStaff(personType) && body.StaffCode != staffInvite {
+	if isStaff(personType) && !validStaffCode(body.StaffCode) {
 		writeError(w, http.StatusForbidden, "A valid staff invite code is required for staff accounts.")
 		return
 	}

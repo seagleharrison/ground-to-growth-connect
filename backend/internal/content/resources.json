@@ -1,0 +1,540 @@
+{
+  "updatedAt": "2026-09-21",
+  "documentGuides": [
+    {
+      "id": "birth-certificate",
+      "title": "Birth certificate",
+      "icon": "description",
+      "summary": "Usually the first one to get. Most other papers ask to see it.",
+      "sections": [
+        {
+          "heading": "How to get it",
+          "items": [
+            "Order it from the Georgia Department of Public Health. You can order online, and the state's page also lists other ways to request it.",
+            "Only the person named on the certificate (or a close family member) can order it. Say who you are and where you were born.",
+            "You'll need to show proof of who you are. Photos of an ID on your phone are not accepted.",
+            "If you were born in another state, order from that state's vital records office instead."
+          ],
+          "numbered": true
+        },
+        {
+          "heading": "Cost and time",
+          "items": [
+            "About $25 for each certified copy, plus about $8 for online processing.",
+            "It can take up to 10 weeks by regular mail. Faster shipping costs extra (about $16 online)."
+          ]
+        },
+        {
+          "heading": "Good to know",
+          "items": [
+            "No ID yet? Ask your outreach worker or case manager. They can often help with the request, or with the fee.",
+            "Ask for a \"certified copy\". That's the kind offices accept."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "label": "Georgia Department of Public Health: ways to request a record",
+          "url": "https://dph.georgia.gov/ways-request-vital-record"
+        },
+        {
+          "label": "Georgia.gov: order a birth certificate",
+          "url": "https://georgia.gov/birth-and-death-certificates"
+        }
+      ],
+      "phones": [],
+      "relatedDocument": "birth_certificate"
+    },
+    {
+      "id": "social-security-card",
+      "title": "Social Security card",
+      "icon": "badge",
+      "summary": "Free to replace. You can get a new one even if you don't remember the number.",
+      "sections": [
+        {
+          "heading": "How to get it",
+          "items": [
+            "Fill out the Social Security card form (Form SS-5). It's free.",
+            "Bring it, with one paper that proves who you are, to your local Social Security office. Find yours with the office locator.",
+            "If you have a Georgia driver's license or state ID and a mailing address, you may be able to do it online with a \"my Social Security\" account.",
+            "The new card comes in the mail in about 10 business days."
+          ],
+          "numbered": true
+        },
+        {
+          "heading": "Cost and limits",
+          "items": [
+            "It costs nothing. Social Security never charges for a card.",
+            "You can get up to 3 replacement cards a year and 10 in your lifetime."
+          ]
+        },
+        {
+          "heading": "Good to know",
+          "items": [
+            "They need a mailing address to send the card. Ask your outreach worker if a trusted place can receive mail for you.",
+            "Asking for a card at a Social Security office is free. Be careful of anyone who asks you to pay."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "label": "Find a Social Security office",
+          "url": "https://www.ssa.gov/locator"
+        },
+        {
+          "label": "Card form (SS-5)",
+          "url": "https://www.ssa.gov/forms/ss-5.pdf"
+        },
+        {
+          "label": "Apply online with my Social Security",
+          "url": "https://www.ssa.gov/myaccount"
+        }
+      ],
+      "phones": [
+        {
+          "label": "Social Security",
+          "display": "1-800-772-1213",
+          "dial": "18007721213"
+        }
+      ],
+      "relatedDocument": "social_security_card"
+    },
+    {
+      "id": "photo-id",
+      "title": "Georgia photo ID",
+      "icon": "contact_page",
+      "summary": "Get your birth certificate and Social Security card first. The ID office asks for them.",
+      "sections": [
+        {
+          "heading": "How to get it",
+          "items": [
+            "Go to a Department of Driver Services (DDS) office and ask for an ID card.",
+            "Bring proof of who you are, your Social Security number, that you're a U.S. citizen or here legally, and where you live.",
+            "For where you live, DDS accepts a letter from a shelter or care provider where you're staying. It must be on their official letterhead.",
+            "DDS lists exactly which papers it accepts on its website. Check before you go."
+          ],
+          "numbered": true
+        },
+        {
+          "heading": "Cost",
+          "items": [
+            "A regular Georgia ID costs about $32.",
+            "Can't pay? Ask about the Indigent ID Card. You get a voucher from an approved nonprofit, then take it to DDS. Ask your outreach worker if they can give you one."
+          ]
+        },
+        {
+          "heading": "Good to know",
+          "items": [
+            "A free voter ID card is also available if you're registered to vote.",
+            "Once you have it, add it to your vault so a copy is always with you."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "label": "DDS: get an ID card",
+          "url": "https://dds.georgia.gov/how-do-i-id-card"
+        },
+        {
+          "label": "DDS: get an Indigent ID Card",
+          "url": "https://dds.georgia.gov/how-do-i-get-indigent-id-card"
+        }
+      ],
+      "phones": [],
+      "relatedDocument": "government_id"
+    },
+    {
+      "id": "dd-214",
+      "title": "Veteran discharge papers (DD-214)",
+      "icon": "military_tech",
+      "summary": "Free to request. It opens the door to VA health care and housing help.",
+      "sections": [
+        {
+          "heading": "How to get it",
+          "items": [
+            "Request it from the National Archives. The easiest way is online with eVetRecs.",
+            "Or mail in Standard Form 180 (SF-180) to the National Personnel Records Center.",
+            "Have ready: your full name, your branch, your dates of service, and your service number or Social Security number."
+          ],
+          "numbered": true
+        },
+        {
+          "heading": "Cost",
+          "items": [
+            "It's free for veterans and their next of kin."
+          ]
+        },
+        {
+          "heading": "Good to know",
+          "items": [
+            "Homeless veterans can call the VA's national helpline any time for housing and health help.",
+            "Mail address: National Personnel Records Center, Military Personnel Records, 1 Archives Drive, St. Louis, MO 63138."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "label": "National Archives: request military service records",
+          "url": "https://www.archives.gov/veterans/military-service-records"
+        },
+        {
+          "label": "About the DD-214",
+          "url": "https://www.archives.gov/personnel-records-center/dd-214"
+        }
+      ],
+      "phones": [
+        {
+          "label": "National Personnel Records Center",
+          "display": "314-801-0800",
+          "dial": "3148010800"
+        },
+        {
+          "label": "National Call Center for Homeless Veterans",
+          "display": "1-877-424-3838",
+          "dial": "18774243838"
+        }
+      ]
+    }
+  ],
+  "benefitPrograms": [
+    {
+      "id": "medicaid",
+      "title": "Medicaid",
+      "icon": "health_and_safety",
+      "summary": "Free or low-cost health coverage. In Georgia it depends on your situation.",
+      "sections": [
+        {
+          "heading": "Who can get it",
+          "items": [
+            "Children, parents with low income, pregnant women, older adults, and people with a qualifying disability.",
+            "Georgia has not expanded Medicaid to every low-income adult. A single adult with no children may not qualify unless they use the Pathways program.",
+            "Georgia Pathways to Coverage is for adults 19 to 64 with no minor children and very low income (about $15,960 a year for one person in 2026). It normally asks for 80 hours a month of work, training, school or certain caregiving.",
+            "Temporary homelessness can count as a \"good cause\" to be excused from the 80 hours. Ask when you apply.",
+            "People who get SSI are generally covered."
+          ]
+        },
+        {
+          "heading": "How to apply",
+          "items": [
+            "Apply on Georgia Gateway (online), or ask your outreach worker or a health center to help you.",
+            "You don't need a permanent address to apply."
+          ],
+          "numbered": true
+        },
+        {
+          "heading": "Have ready",
+          "items": [
+            "Photo ID, Social Security number, proof of income (or a note that you have none), and a mailing address."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "label": "Georgia Pathways to Coverage",
+          "url": "https://pathways.georgia.gov/eligibility"
+        },
+        {
+          "label": "Apply on Georgia Gateway",
+          "url": "https://gateway.ga.gov"
+        }
+      ],
+      "phones": []
+    },
+    {
+      "id": "health-centers",
+      "title": "Low-cost clinics in Savannah",
+      "icon": "local_hospital",
+      "summary": "See a doctor, dentist or counselor for a fee based on your income, even with no insurance.",
+      "sections": [
+        {
+          "heading": "Where to go",
+          "items": [
+            "Curtis V. Cooper Primary Health Care is a community health center for Savannah and Chatham County. It offers checkups, behavioral health, pharmacy and dental care, with discounts based on income and family size.",
+            "J.C. Lewis Primary Health Care Center was started by Union Mission to care for people who are homeless."
+          ]
+        },
+        {
+          "heading": "Good to know",
+          "items": [
+            "Community health centers see people whether or not they can pay.",
+            "Ask about the \"sliding fee\" or \"discount\" program when you call or check in.",
+            "Bring any ID or insurance card you have, but don't stay away if you have none."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "label": "Curtis V. Cooper Primary Health Care",
+          "url": "https://www.cvcphc.net/"
+        },
+        {
+          "label": "Free and low-cost clinics in Chatham County",
+          "url": "https://freeclinicdirectory.org/georgia_care/chatham_ga_county.html"
+        }
+      ],
+      "phones": []
+    },
+    {
+      "id": "marketplace",
+      "title": "Insurance plans with help paying",
+      "icon": "verified_user",
+      "summary": "Private health plans with lower prices for people with low income.",
+      "sections": [
+        {
+          "heading": "Who can get it",
+          "items": [
+            "Adults with low or no income can often get a plan with a big discount on the monthly cost.",
+            "There is usually a sign-up period each year. Some life changes, like losing coverage, open a chance to sign up at other times."
+          ]
+        },
+        {
+          "heading": "How to apply",
+          "items": [
+            "Go to Georgia Access, or ask a local helper (called a \"navigator\") to sit down with you and do it together."
+          ],
+          "numbered": true
+        }
+      ],
+      "links": [
+        {
+          "label": "Georgia Access",
+          "url": "https://www.georgiaaccess.gov"
+        }
+      ],
+      "phones": []
+    },
+    {
+      "id": "medicare",
+      "title": "Medicare",
+      "icon": "elderly",
+      "summary": "For people 65 and older, and some people with disabilities.",
+      "sections": [
+        {
+          "heading": "Who can get it",
+          "items": [
+            "People 65 or older who have worked enough, and people who have received Social Security disability (SSDI) for 24 months.",
+            "If you have low income, help paying the monthly cost may be available."
+          ]
+        },
+        {
+          "heading": "How to apply",
+          "items": [
+            "Apply with Social Security, or call and ask."
+          ],
+          "numbered": true
+        }
+      ],
+      "links": [
+        {
+          "label": "Medicare",
+          "url": "https://www.medicare.gov"
+        }
+      ],
+      "phones": [
+        {
+          "label": "Medicare",
+          "display": "1-800-633-4227",
+          "dial": "18006334227"
+        }
+      ]
+    },
+    {
+      "id": "va",
+      "title": "VA health care for veterans",
+      "icon": "military_tech",
+      "summary": "Health care, mental health care and housing help for veterans. Homeless veterans get priority help.",
+      "sections": [
+        {
+          "heading": "Who can get it",
+          "items": [
+            "Most veterans who served on active duty and did not receive a dishonorable discharge.",
+            "HUD-VASH pairs a housing voucher with a VA case manager for homeless veterans."
+          ]
+        },
+        {
+          "heading": "How to apply",
+          "items": [
+            "Apply online at VA.gov, call, or visit a VA medical center.",
+            "Have your DD-214 discharge papers if you can. If you don't have them, see \"Replace a document\"."
+          ],
+          "numbered": true
+        }
+      ],
+      "links": [
+        {
+          "label": "Apply for VA health care",
+          "url": "https://www.va.gov/health-care/apply/"
+        }
+      ],
+      "phones": [
+        {
+          "label": "National Call Center for Homeless Veterans",
+          "display": "1-877-424-3838",
+          "dial": "18774243838"
+        }
+      ]
+    },
+    {
+      "id": "hospital-help",
+      "title": "Hospital bills",
+      "icon": "receipt_long",
+      "summary": "Nonprofit hospitals must have a way to reduce or wipe out bills for people who can't pay.",
+      "sections": [
+        {
+          "heading": "What to do",
+          "items": [
+            "Ask the hospital for \"financial assistance\" or \"charity care\" and for the application.",
+            "Ask before you pay anything. You can often apply even after you've been treated.",
+            "Keep the papers they give you. Your outreach worker can help fill it out."
+          ],
+          "numbered": true
+        }
+      ],
+      "links": [],
+      "phones": []
+    },
+    {
+      "id": "food",
+      "title": "Food help (SNAP and WIC)",
+      "icon": "restaurant",
+      "summary": "Monthly money for groceries, and extra food help for young families.",
+      "sections": [
+        {
+          "heading": "Who can get it",
+          "items": [
+            "SNAP helps people with low income buy food. You don't need a permanent address to apply.",
+            "WIC is for pregnant women, new mothers, babies, and children under 5."
+          ]
+        },
+        {
+          "heading": "How to apply",
+          "items": [
+            "Apply for SNAP on Georgia Gateway. Tell them if you have almost no money right now, since that can speed things up.",
+            "For WIC, contact the Chatham County health department."
+          ],
+          "numbered": true
+        }
+      ],
+      "links": [
+        {
+          "label": "Apply on Georgia Gateway",
+          "url": "https://gateway.ga.gov"
+        }
+      ],
+      "phones": []
+    },
+    {
+      "id": "mental-health",
+      "title": "Mental health and crisis help",
+      "icon": "favorite",
+      "summary": "Someone is there to talk any time, day or night.",
+      "sections": [
+        {
+          "heading": "Right now",
+          "items": [
+            "If you or someone else is in danger, call 911.",
+            "If you're in crisis or thinking about hurting yourself, call or text 988. It's free and open all day and night."
+          ]
+        },
+        {
+          "heading": "Ongoing care",
+          "items": [
+            "Community health centers, like Curtis V. Cooper, offer counseling and help with substance use on a sliding fee.",
+            "Ask your outreach worker to connect you with a counselor."
+          ]
+        }
+      ],
+      "links": [],
+      "phones": [
+        {
+          "label": "Crisis line (call or text)",
+          "display": "988",
+          "dial": "988"
+        },
+        {
+          "label": "Emergency",
+          "display": "911",
+          "dial": "911"
+        }
+      ]
+    }
+  ],
+  "places": [
+    {
+      "id": "dds-savannah",
+      "name": "Georgia DDS Customer Service Center",
+      "category": "id",
+      "address": "1117 Eisenhower Drive, Suite B, Savannah, GA 31406",
+      "lat": 32.0053555,
+      "lng": -81.0998799,
+      "phone": {
+        "display": "(678) 413-8400",
+        "dial": "6784138400"
+      },
+      "url": "https://dds.georgia.gov/locations/savannah",
+      "hours": "Tue–Fri 7:30 a.m.–6:30 p.m., Sat 7:30 a.m.–12 p.m. Closed Sun and Mon.",
+      "note": "Get a Georgia ID card here. Bring your papers, or ask about an Indigent ID voucher first.",
+      "verifiedOn": "2026-09-21"
+    },
+    {
+      "id": "chatham-health-dept",
+      "name": "Chatham County Health Department",
+      "category": "records",
+      "address": "1395 Eisenhower Drive, Savannah, GA 31406",
+      "lat": 32.002868,
+      "lng": -81.0919472,
+      "phone": {
+        "display": "912-356-2138",
+        "dial": "9123562138"
+      },
+      "url": "https://dph.georgia.gov/locations/chatham-county-health-department",
+      "note": "Birth certificates (vital records) are by appointment only. Also WIC, shots and clinic visits.",
+      "verifiedOn": "2026-09-21"
+    },
+    {
+      "id": "cvc-main",
+      "name": "Curtis V. Cooper Primary Health Care",
+      "category": "health",
+      "address": "106 E Broad Street, Savannah, GA 31401",
+      "lat": 32.076441,
+      "lng": -81.084811,
+      "phone": {
+        "display": "912-527-1000",
+        "dial": "9125271000"
+      },
+      "url": "https://www.cvcphc.net/locations",
+      "note": "Low-cost doctor, dentist, pharmacy and counseling. Fees are based on your income.",
+      "verifiedOn": "2026-09-21"
+    },
+    {
+      "id": "union-mission",
+      "name": "Union Mission",
+      "category": "shelter",
+      "address": "120 Fahm Street, Savannah, GA 31401",
+      "lat": 32.080601,
+      "lng": -81.1003591,
+      "phone": {
+        "display": "912-238-2777",
+        "dial": "9122382777"
+      },
+      "url": "https://www.unionmission.org/",
+      "note": "Emergency shelter, housing help, health care and work programs. Call first to ask what is open.",
+      "verifiedOn": "2026-09-21"
+    },
+    {
+      "id": "va-savannah",
+      "name": "Savannah VA Clinic",
+      "category": "veterans",
+      "address": "1170 Shawnee Street, Savannah, GA 31419",
+      "lat": 31.9861361,
+      "lng": -81.1735801,
+      "phone": {
+        "display": "912-920-0214",
+        "dial": "9129200214"
+      },
+      "url": "https://www.va.gov/find-locations/facility/vha_534BY",
+      "note": "Health care for veterans, including mental health. Ask about help for homeless veterans.",
+      "verifiedOn": "2026-09-21"
+    }
+  ]
+}

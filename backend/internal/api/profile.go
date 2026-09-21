@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"ground-to-growth-connect-backend/internal/blobstore"
+	"ground-to-growth-connect-backend/internal/consent"
 	"ground-to-growth-connect-backend/internal/cryptox"
 )
 
@@ -29,13 +30,18 @@ func profilePictureKey(userID string) string {
 
 // updateProfileRequest uses pointers so that an omitted field means "leave
 // this alone" while an empty string means "clear it" (for the optional
-// fields). Account type is deliberately not editable here: it decides who can
-// see other people's locations, so it can't be self-service.
+// fields).
+//
+// PersonType changes the account type. Account type decides who can see other
+// people's locations, so moving *into* a staff role needs the same staff invite
+// code as signing up as staff; moving back to a participant account is free.
 type updateProfileRequest struct {
-	Name   *string `json:"name"`
-	Email  *string `json:"email"`
-	Phone  *string `json:"phone"`
-	Gender *string `json:"gender"`
+	Name       *string `json:"name"`
+	Email      *string `json:"email"`
+	Phone      *string `json:"phone"`
+	Gender     *string `json:"gender"`
+	PersonType *string `json:"personType"`
+	StaffCode  *string `json:"staffCode"`
 }
 
 func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +51,26 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
 		return
+	}
+
+	personType := u.PersonType
+	if body.PersonType != nil && *body.PersonType != u.PersonType {
+		requested := *body.PersonType
+		if !contains(personTypes, requested) {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("personType must be one of: %s", strings.Join(personTypes, ", ")))
+			return
+		}
+		if isStaff(requested) {
+			code := ""
+			if body.StaffCode != nil {
+				code = *body.StaffCode
+			}
+			if !validStaffCode(code) {
+				writeError(w, http.StatusForbidden, "A valid staff invite code is required for staff accounts.")
+				return
+			}
+		}
+		personType = requested
 	}
 
 	nameEnc, emailEnc, genderEnc, phoneEnc := u.NameEncrypted, u.EmailEncrypted, u.GenderEncrypted, u.PhoneEncrypted
@@ -100,15 +126,40 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := s.db.Exec(
-		`UPDATE users SET name_encrypted = ?, email_encrypted = ?, gender_encrypted = ?, phone_encrypted = ? WHERE id = ?`,
-		nameEnc, emailEnc, genderEnc, phoneEnc, u.ID,
+		`UPDATE users SET person_type = ?, name_encrypted = ?, email_encrypted = ?, gender_encrypted = ?, phone_encrypted = ? WHERE id = ?`,
+		personType, nameEnc, emailEnc, genderEnc, phoneEnc, u.ID,
 	); err != nil {
 		writeInternalError(w, err)
 		return
 	}
 
+	// A participant who becomes staff stops sharing their location. Without
+	// this, switching back later would silently start sharing again.
+	if !isStaff(u.PersonType) && isStaff(personType) {
+		s.revokeLocationConsentIfGranted(u.ID)
+	}
+	u.PersonType = personType
+
 	u.NameEncrypted, u.EmailEncrypted, u.GenderEncrypted, u.PhoneEncrypted = nameEnc, emailEnc, genderEnc, phoneEnc
 	s.writeProfile(w, http.StatusOK, u)
+}
+
+func (s *Server) revokeLocationConsentIfGranted(userID string) {
+	var granted int
+	err := s.db.QueryRow(
+		`SELECT granted FROM user_consent_status WHERE user_id = ? AND consent_type = ?`,
+		userID, consentTypeLocation,
+	).Scan(&granted)
+	if err != nil || granted != 1 {
+		return
+	}
+	if _, err := s.db.Exec(
+		`INSERT INTO consent_records (user_id, consent_type, consent_version, disclosure_text, granted, revoked_at)
+		 VALUES (?, ?, ?, ?, 0, ?)`,
+		userID, consentTypeLocation, consent.Version(), consent.LocationDisclosureText(), nowISO(),
+	); err != nil {
+		log.Printf("revoking location consent for %s after role change: %v", userID, err)
+	}
 }
 
 func (s *Server) writeProfile(w http.ResponseWriter, status int, u *authUser) {

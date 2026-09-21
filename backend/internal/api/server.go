@@ -61,6 +61,10 @@ func NewServer(db *sql.DB, docs blobstore.Store) http.Handler {
 
 	mux.HandleFunc("POST /api/locations", s.withAuth(s.withConsent(s.handleCreateLocation)))
 	mux.HandleFunc("GET /api/locations/latest", s.withAuth(s.withStaff(s.handleLatestLocations)))
+	mux.HandleFunc("GET /api/resources", s.handleResources)
+	mux.HandleFunc("GET /api/analytics", s.withAuth(s.withAdmin(s.handleAnalytics)))
+	mux.HandleFunc("GET /api/analytics/sources", s.withAuth(s.withAdmin(s.handleSourceReport)))
+	mux.HandleFunc("POST /api/analytics/sources/reviewed", s.withAuth(s.withAdmin(s.handleSourceReviewed)))
 	mux.HandleFunc("GET /api/locations/mine", s.withAuth(s.handleMyLocations))
 
 	mux.HandleFunc("POST /api/documents", s.withAuth(s.withDocumentConsent(s.handleUploadDocument)))

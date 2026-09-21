@@ -150,3 +150,16 @@ FROM (
   FROM consent_records
 )
 WHERE rn = 1;
+
+-- Pages the Resources tab points to, checked now and then so an admin hears
+-- about a page that has vanished or changed. See internal/freshness.
+CREATE TABLE IF NOT EXISTS source_checks (
+  url TEXT PRIMARY KEY,
+  status INTEGER NOT NULL DEFAULT 0,      -- HTTP status, or 0 if unreachable
+  error TEXT,
+  content_hash TEXT,                       -- fingerprint of the page text at the last good check
+  reviewed_hash TEXT,                      -- the fingerprint a person last signed off on
+  acknowledged_status INTEGER,             -- an error status a person has seen and accepted
+  checked_at TEXT NOT NULL,
+  first_checked_at TEXT NOT NULL
+);

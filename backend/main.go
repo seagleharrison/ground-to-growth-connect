@@ -14,7 +14,9 @@ import (
 
 	"ground-to-growth-connect-backend/internal/api"
 	"ground-to-growth-connect-backend/internal/blobstore"
+	"ground-to-growth-connect-backend/internal/content"
 	"ground-to-growth-connect-backend/internal/dbstore"
+	"ground-to-growth-connect-backend/internal/freshness"
 )
 
 //go:embed sql/001_init.sql
@@ -109,6 +111,15 @@ func main() {
 	host := os.Getenv("HOST")
 	if host == "" {
 		host = "0.0.0.0"
+	}
+
+	// Now and then, re-check the official pages the Resources tab points to, so
+	// an admin hears about one that has vanished or changed. Set
+	// FRESHNESS_CHECKS=off to disable (for example on a laptop).
+	watchCtx, stopWatching := context.WithCancel(context.Background())
+	defer stopWatching()
+	if os.Getenv("FRESHNESS_CHECKS") != "off" {
+		go freshness.NewChecker(db, content.SourceURLs).Loop(watchCtx, 24*time.Hour)
 	}
 
 	handler := api.NewServer(db, docs)

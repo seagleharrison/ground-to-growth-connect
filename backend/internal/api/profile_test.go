@@ -108,17 +108,19 @@ func TestUpdateProfileValidation(t *testing.T) {
 	}
 }
 
-func TestUpdateProfileCannotChangeAccountType(t *testing.T) {
+func TestUpdateProfileCannotPromoteYourselfWithoutTheCode(t *testing.T) {
 	h := newTestServer(t)
 	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 
-	// personType is not part of the update request, so it must be ignored
-	// rather than letting a participant promote themselves to staff.
-	patchMe(t, h, token, map[string]interface{}{"personType": "admin", "name": "Jane Doe"})
+	// Asking for a staff role alongside an ordinary edit must be refused as a
+	// whole, so a participant can't promote themselves.
+	if code := patchMeStatus(t, h, token, map[string]interface{}{"personType": "admin", "name": "Renamed"}); code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", code)
+	}
 
 	me := getMe(t, h, token)
-	if me["personType"] != "homeless" || me["isStaff"] != false {
-		t.Fatalf("account type must not be self-editable, got %v", me)
+	if me["personType"] != "homeless" || me["isStaff"] != false || me["name"] != "Jane Doe" {
+		t.Fatalf("a refused request must change nothing, got %v", me)
 	}
 }
 
@@ -354,5 +356,109 @@ func TestDeleteAccountRemovesStoredFiles(t *testing.T) {
 		if _, err := store.Get(context.Background(), key); !errors.Is(err, blobstore.ErrNotFound) {
 			t.Errorf("file %s should be gone after account deletion, Get returned %v", key, err)
 		}
+	}
+}
+
+// --- changing account type ---
+
+func patchMeStatus(t *testing.T, h http.Handler, token string, body map[string]interface{}) int {
+	t.Helper()
+	return doRequest(t, h, http.MethodPatch, "/api/me", token, body).Code
+}
+
+func TestChangeToStaffNeedsTheStaffCode(t *testing.T) {
+	h := newTestServer(t)
+	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+
+	for name, body := range map[string]map[string]interface{}{
+		"no code":    {"personType": "volunteer"},
+		"wrong code": {"personType": "admin", "staffCode": "wrong-code"},
+	} {
+		if code := patchMeStatus(t, h, token, body); code != http.StatusForbidden {
+			t.Fatalf("%s: expected 403, got %d", name, code)
+		}
+	}
+	me := getMe(t, h, token)
+	if me["personType"] != "homeless" || me["isStaff"] != false {
+		t.Fatalf("a refused change must leave the account alone: %v", me)
+	}
+	if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", token, nil).Code; code != http.StatusForbidden {
+		t.Fatalf("still a participant, so the staff map must stay closed: got %d", code)
+	}
+}
+
+func TestChangeToStaffWithTheRightCode(t *testing.T) {
+	h := newTestServer(t)
+	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+
+	updated := patchMe(t, h, token, map[string]interface{}{"personType": "employee", "staffCode": testStaffCode})
+	if updated["personType"] != "employee" || updated["isStaff"] != true {
+		t.Fatalf("expected an employee, got %v", updated)
+	}
+	if got := getMe(t, h, token); got["personType"] != "employee" {
+		t.Fatalf("change did not persist: %v", got)
+	}
+	if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", token, nil).Code; code != http.StatusOK {
+		t.Fatalf("staff should now reach the staff map, got %d", code)
+	}
+}
+
+func TestStaffCanBecomeAParticipantWithoutACode(t *testing.T) {
+	h := newTestServer(t)
+	token, _ := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
+
+	updated := patchMe(t, h, token, map[string]interface{}{"personType": "homeless"})
+	if updated["personType"] != "homeless" || updated["isStaff"] != false {
+		t.Fatalf("expected a participant, got %v", updated)
+	}
+	if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", token, nil).Code; code != http.StatusForbidden {
+		t.Fatalf("a participant must lose staff access, got %d", code)
+	}
+}
+
+func TestSwitchingStaffRoleAgainNeedsTheCode(t *testing.T) {
+	h := newTestServer(t)
+	token, _ := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
+
+	if code := patchMeStatus(t, h, token, map[string]interface{}{"personType": "admin"}); code != http.StatusForbidden {
+		t.Fatalf("volunteer -> admin without the code must be refused, got %d", code)
+	}
+	if got := patchMe(t, h, token, map[string]interface{}{"personType": "admin", "staffCode": testStaffCode}); got["personType"] != "admin" {
+		t.Fatalf("expected admin with the code, got %v", got)
+	}
+}
+
+func TestChangeToAnUnknownAccountTypeIsRejected(t *testing.T) {
+	h := newTestServer(t)
+	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	if code := patchMeStatus(t, h, token, map[string]interface{}{"personType": "superuser", "staffCode": testStaffCode}); code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", code)
+	}
+}
+
+func TestSendingTheSameAccountTypeIsANoOp(t *testing.T) {
+	h := newTestServer(t)
+	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	updated := patchMe(t, h, token, map[string]interface{}{"personType": "homeless", "name": "Janet Doe"})
+	if updated["personType"] != "homeless" || updated["name"] != "Janet Doe" {
+		t.Fatalf("unexpected result: %v", updated)
+	}
+}
+
+func TestBecomingStaffStopsLocationSharing(t *testing.T) {
+	h := newTestServer(t)
+	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	if code := doRequest(t, h, http.MethodPost, "/api/consent", token, map[string]interface{}{"granted": true}).Code; code != http.StatusOK {
+		t.Fatalf("granting consent: %d", code)
+	}
+
+	patchMe(t, h, token, map[string]interface{}{"personType": "volunteer", "staffCode": testStaffCode})
+	patchMe(t, h, token, map[string]interface{}{"personType": "homeless"})
+
+	rec := doRequest(t, h, http.MethodGet, "/api/consent/status", token, nil)
+	var status map[string]interface{}
+	decodeJSON(t, rec, &status)
+	if status["granted"] != false {
+		t.Fatalf("switching back must not silently resume sharing: %v", status)
 	}
 }
