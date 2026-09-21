@@ -176,6 +176,15 @@ class ApiClient {
         .toList();
   }
 
+  /// Staff only. Participants with nothing on file are simply absent.
+  Future<Map<String, Set<DocumentType>>> fetchDocumentsOnFile() async {
+    final json = await _request(path: '/api/documents/on-file');
+    return {
+      for (final p in (json['participants'] as List))
+        DocumentsOnFile.fromJson(p as Map<String, dynamic>).userId: DocumentsOnFile.fromJson(p).types,
+    };
+  }
+
   Future<GetDocumentResponse> fetchDocument(String id) async {
     final json = await _request(path: '/api/documents/$id', timeout: const Duration(seconds: 60));
     return GetDocumentResponse.fromJson(json);

@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'dart:io';
+
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:http/testing.dart';
 
 /// An in-memory stand-in for the Go backend, covering just the endpoints the
@@ -39,7 +42,16 @@ class FakeApi {
 
   late final MockClient client = MockClient(_handle);
 
+  /// Only for taking design screenshots: lets real map tiles download instead
+  /// of answering "not found". Off in the automated tests.
+  static bool passThroughMapTiles = false;
+  static final IOClient _realNetwork = IOClient(HttpClient());
+
   Future<http.Response> _handle(http.Request request) async {
+    if (passThroughMapTiles && request.url.host.endsWith('openstreetmap.org')) {
+      final forwarded = http.Request(request.method, request.url)..headers.addAll(request.headers);
+      return http.Response.fromStream(await _realNetwork.send(forwarded));
+    }
     final route = '${request.method} ${request.url.path}';
 
     // GET /api/documents/{id}: hand back the stored file (a real 1x1 PNG).

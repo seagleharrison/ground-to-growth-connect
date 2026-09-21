@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'nav.dart';
+import 'theme/app_theme.dart';
 import 'services/biometric_auth.dart';
 import 'views/main_tab_view.dart';
 import 'views/register_view.dart';
@@ -15,18 +17,16 @@ class GroundToGrowthConnectApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AppState()..init(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppState()..init()),
+        ChangeNotifierProvider(create: (_) => TabNav()),
+      ],
       child: MaterialApp(
         title: 'Ground to Growth Connect',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange, brightness: Brightness.dark),
-          useMaterial3: true,
-        ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange, brightness: Brightness.dark),
-          useMaterial3: true,
-        ),
+        debugShowCheckedModeBanner: false,
+        theme: buildAppTheme(),
+        darkTheme: buildAppTheme(),
         themeMode: ThemeMode.dark,
         home: const RootView(),
       ),
@@ -95,23 +95,50 @@ class LockedView extends StatefulWidget {
   State<LockedView> createState() => _LockedViewState();
 }
 
-class _LockedViewState extends State<LockedView> {
+/// Asks for Face ID by itself the moment the app is open and in front — on a
+/// cold start and every time the person comes back to it — so signing in is
+/// just looking at the phone. The Unlock button is only a fallback.
+class _LockedViewState extends State<LockedView> with WidgetsBindingObserver {
   String? _authError;
+  bool _prompting = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _unlock());
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // iOS refuses Face ID until the app is fully in front. If it isn't yet,
+      // the "resumed" callback below asks as soon as it is.
+      final state = WidgetsBinding.instance.lifecycleState;
+      if (mounted && (state == null || state == AppLifecycleState.resumed)) _unlock();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) _unlock();
   }
 
   Future<void> _unlock() async {
+    if (_prompting) return;
+    _prompting = true;
     setState(() => _authError = null);
-    final ok = await BiometricAuth.authenticate('Unlock Ground to Growth Connect');
-    if (!mounted) return;
-    if (ok) {
-      context.read<AppState>().setUnlocked(true);
-    } else {
-      setState(() => _authError = 'Authentication failed. Try again.');
+    try {
+      final ok = await BiometricAuth.authenticate('Unlock Ground to Growth Connect');
+      if (!mounted) return;
+      if (ok) {
+        context.read<AppState>().setUnlocked(true);
+      } else {
+        setState(() => _authError = "Face ID didn't work. Tap Unlock to try again.");
+      }
+    } finally {
+      _prompting = false;
     }
   }
 

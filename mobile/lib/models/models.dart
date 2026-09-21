@@ -357,6 +357,20 @@ class DocumentMeta {
       );
 }
 
+/// Staff-only: which document *types* a participant has on file. Staff never
+/// see the documents themselves — only that they exist.
+class DocumentsOnFile {
+  final String userId;
+  final Set<DocumentType> types;
+
+  DocumentsOnFile({required this.userId, required this.types});
+
+  factory DocumentsOnFile.fromJson(Map<String, dynamic> json) => DocumentsOnFile(
+        userId: json['userId'] as String,
+        types: {for (final t in (json['documentTypes'] as List)) DocumentType.fromWire(t as String)},
+      );
+}
+
 class GetDocumentResponse {
   final DocumentMeta document;
   final String fileBase64;

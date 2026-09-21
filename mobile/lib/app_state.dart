@@ -255,6 +255,25 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Staff only: which document types each participant has on file.
+  Map<String, Set<DocumentType>> documentsOnFile = {};
+
+  Future<void> refreshPeople() async {
+    if (!isSignedIn || user?.isStaff != true) return;
+    try {
+      final results = await Future.wait([
+        ApiClient.shared.fetchLatestLocations(),
+        ApiClient.shared.fetchDocumentsOnFile(),
+      ]);
+      locations = results[0] as List<UserLocation>;
+      documentsOnFile = results[1] as Map<String, Set<DocumentType>>;
+      notifyListeners();
+    } catch (e) {
+      errorMessage = '$e';
+      notifyListeners();
+    }
+  }
+
   Future<void> refreshMyLocations() async {
     if (!isSignedIn) return;
     try {
@@ -361,6 +380,7 @@ class AppState extends ChangeNotifier {
     consent = null;
     consentHistory = [];
     locations = [];
+    documentsOnFile = {};
     myLocations = [];
     documentConsent = null;
     documentDisclosure = null;

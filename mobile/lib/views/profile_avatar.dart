@@ -23,14 +23,14 @@ class ProfileAvatar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return CircleAvatar(
       radius: radius,
-      backgroundColor: scheme.primaryContainer,
+      backgroundColor: scheme.surfaceContainerHigh,
       foregroundImage: bytes != null ? MemoryImage(bytes!) : null,
       child: Text(
         _initials,
         style: TextStyle(
           fontSize: radius * 0.75,
           fontWeight: FontWeight.w600,
-          color: scheme.onPrimaryContainer,
+          color: scheme.primary,
         ),
       ),
     );

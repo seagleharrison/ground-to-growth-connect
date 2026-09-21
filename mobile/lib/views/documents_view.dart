@@ -9,6 +9,9 @@ import '../models/models.dart';
 import '../services/api_client.dart';
 import '../services/biometric_auth.dart';
 import '../services/document_scanner_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/confetti.dart';
+import '../widgets/ui.dart';
 
 /// Direct equivalent of the native app's DocumentsView.swift: consent gate,
 /// checklist of core document types, step-up Face ID before scanning or
@@ -44,12 +47,10 @@ class _DocumentsViewState extends State<DocumentsView> {
     final app = context.watch<AppState>();
     final granted = app.documentConsent?.granted == true;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('My documents')),
-      body: RefreshIndicator(
-        onRefresh: () => context.read<AppState>().refreshDocumentConsent(),
-        child: granted ? _buildDocumentsList(context, app) : _buildConsentGate(context, app),
-      ),
+    return LargeTitlePage(
+      title: 'Documents',
+      onRefresh: () => context.read<AppState>().refreshDocumentConsent(),
+      children: granted ? _documentsChildren(context, app) : _consentGateChildren(context, app),
     );
   }
 
@@ -67,73 +68,74 @@ class _DocumentsViewState extends State<DocumentsView> {
     );
   }
 
-  Widget _buildDocumentsList(BuildContext context, AppState app) {
+  List<Widget> _documentsChildren(BuildContext context, AppState app) {
     final missing = missingCoreDocuments(app.documents);
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _checklistCard(context, app),
-        const SizedBox(height: 16),
-        if (missing.isNotEmpty) ...[
-          FilledButton.icon(
-            onPressed: () => _openWizard(startAt: missing.first),
-            icon: const Icon(Icons.document_scanner_outlined),
-            label: Text(missing.length == DocumentType.coreChecklist.length
-                ? 'Start: ${missing.first.label}'
-                : 'Next: ${missing.first.label}'),
+    return [
+      const FadeSlideIn(
+        child: Padding(
+          padding: EdgeInsets.only(left: 4, right: 4, bottom: 18),
+          child: Text(
+            'Your important papers: encrypted, private, and always with you.',
+            style: TextStyle(color: Colors.white60, fontSize: 15, height: 1.4),
           ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: () => _openWizard(),
-            child: const Text('Add a different document'),
-          ),
-        ] else ...[
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: walletGreen.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.verified, color: walletGreen),
-                SizedBox(width: 10),
-                Expanded(child: Text("All three documents are on file. You're all set.")),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: () => _openWizard(),
-            child: const Text('Add another document'),
-          ),
-        ],
-        if (app.documents.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          const Text('All documents', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          for (final doc in app.documents)
-            _documentRow(context, doc, onTap: () => _authenticateThenRun(
-              "Verify it's you before viewing this document",
-              () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => DocumentDetailView(document: doc)),
-              ),
-            )),
-        ],
-        const SizedBox(height: 24),
-        OutlinedButton(
-          onPressed: () => context.read<AppState>().revokeDocumentConsent(),
-          style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-          child: const Text('Stop storing documents'),
         ),
-        const SizedBox(height: 8),
-        Text(
+      ),
+      FadeSlideIn(delay: const Duration(milliseconds: 80), child: _checklistCard(context, app)),
+      const SizedBox(height: 20),
+      if (missing.isNotEmpty) ...[
+        GradientButton(
+          icon: Icons.document_scanner_rounded,
+          label: missing.length == DocumentType.coreChecklist.length
+              ? 'Start: ${missing.first.label}'
+              : 'Next: ${missing.first.label}',
+          onPressed: () => _openWizard(startAt: missing.first),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton(onPressed: () => _openWizard(), child: const Text('Add a different document')),
+      ] else ...[
+        AppCard(
+          color: const Color(0xFF14261A),
+          padding: const EdgeInsets.all(16),
+          child: const Row(
+            children: [
+              Icon(Icons.verified_rounded, color: walletGreen, size: 28),
+              SizedBox(width: 12),
+              Expanded(child: Text("All three documents are on file. You're all set.", style: TextStyle(fontWeight: FontWeight.w600, height: 1.35))),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton(onPressed: () => _openWizard(), child: const Text('Add another document')),
+      ],
+      if (app.documents.isNotEmpty) ...[
+        const SizedBox(height: 28),
+        const SectionLabel('All documents'),
+        for (final doc in app.documents)
+          _documentRow(
+            context,
+            doc,
+            onTap: () => _authenticateThenRun(
+              "Verify it's you before viewing this document",
+              () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocumentDetailView(document: doc))),
+            ),
+          ),
+      ],
+      const SizedBox(height: 28),
+      OutlinedButton(
+        onPressed: () => context.read<AppState>().revokeDocumentConsent(),
+        style: OutlinedButton.styleFrom(foregroundColor: Brand.red),
+        child: const Text('Stop storing documents'),
+      ),
+      const SizedBox(height: 10),
+      const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 4),
+        child: Text(
           'This does not delete documents already stored — delete those individually. '
           'It only stops you from uploading new ones until you opt back in.',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: TextStyle(color: Colors.white54, fontSize: 12.5, height: 1.4),
         ),
-      ],
-    );
+      ),
+    ];
   }
 
   /// The three core documents as a stack of wallet cards, like Apple Wallet:
@@ -186,8 +188,9 @@ class _DocumentsViewState extends State<DocumentsView> {
     final onFile = docs.isNotEmpty;
     final colors = walletColors(type);
 
-    return GestureDetector(
+    return PressableScale(
       key: Key('wallet-card-${type.wireValue}'),
+      pressedScale: 0.985,
       onTap: () {
         if (!onFile) {
           _openWizard(startAt: type);
@@ -257,123 +260,130 @@ class _DocumentsViewState extends State<DocumentsView> {
   /// Green check in a circle once the document is on file; an empty outlined
   /// circle while it's still needed.
   Widget _statusCircle(bool onFile) {
-    return Container(
-      key: Key(onFile ? 'status-on-file' : 'status-needed'),
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: onFile ? walletGreen : Colors.transparent,
-        border: onFile ? null : Border.all(color: Colors.white54, width: 2),
+    // The check pops in with a little bounce when a document is added.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 450),
+      switchInCurve: Curves.elasticOut,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+      child: Container(
+        key: Key(onFile ? 'status-on-file' : 'status-needed'),
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: onFile ? walletGreen : Colors.transparent,
+          border: onFile ? null : Border.all(color: Colors.white54, width: 2),
+          boxShadow: onFile ? [BoxShadow(color: walletGreen.withValues(alpha: 0.5), blurRadius: 12)] : null,
+        ),
+        child: onFile ? const Icon(Icons.check_rounded, color: Colors.white, size: 21) : null,
       ),
-      child: onFile ? const Icon(Icons.check, color: Colors.white, size: 21) : null,
     );
   }
 
   Widget _documentRow(BuildContext context, DocumentMeta doc, {required VoidCallback onTap}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(_iconFor(doc.type), size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        (doc.label?.isNotEmpty == true) ? doc.label! : doc.type.label,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      Text(
-                        // The title already names the type unless a custom
-                        // label replaced it, so only repeat it in that case.
-                        [
-                          if (doc.label?.isNotEmpty == true) doc.type.label,
-                          _formatSize(doc.fileSizeBytes),
-                          doc.createdAt.substring(0, 10),
-                        ].join(' · '),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right, size: 18),
-              ],
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppCard(
+        onTap: onTap,
+        radius: 20,
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                gradient: LinearGradient(colors: walletColors(doc.type), begin: Alignment.topLeft, end: Alignment.bottomRight),
+              ),
+              child: Icon(walletIcon(doc.type), color: Colors.white, size: 24),
             ),
-          ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    (doc.label?.isNotEmpty == true) ? doc.label! : doc.type.label,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                  Text(
+                    // The title already names the type unless a custom label
+                    // replaced it, so only repeat it in that case.
+                    [
+                      if (doc.label?.isNotEmpty == true) doc.type.label,
+                      _formatSize(doc.fileSizeBytes),
+                      doc.createdAt.substring(0, 10),
+                    ].join(' · '),
+                    style: const TextStyle(color: Colors.white54, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildConsentGate(BuildContext context, AppState app) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(12),
-          ),
+  List<Widget> _consentGateChildren(BuildContext context, AppState app) {
+    return [
+      FadeSlideIn(
+        child: AppCard(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.lock_outline, size: 40, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(height: 8),
-              const Text('Store a document', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(gradient: Brand.heroGradient, borderRadius: BorderRadius.circular(20)),
+                child: const Icon(Icons.lock_rounded, size: 32, color: Color(0xFF3A1D00)),
+              ),
+              const SizedBox(height: 16),
+              Text('Keep your papers safe', style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
               const Text(
-                'Keep an encrypted copy of important documents — like your ID or Social Security '
-                'card — so you always have access, even if the physical copy is lost. This is '
-                'separate from location sharing; you can use one without the other.',
+                'Keep an encrypted copy of important documents, like your ID or Social Security card, so you always have access, even if the physical copy is lost. This is separate from location sharing; you can use one without the other.',
+                style: TextStyle(color: Colors.white70, height: 1.45, fontSize: 15),
               ),
+              const SizedBox(height: 18),
+              const _GatePoint(Icons.enhanced_encryption_rounded, 'Encrypted before it is saved'),
+              const _GatePoint(Icons.visibility_off_rounded, 'Only you can open your documents. Staff can never see them.'),
+              const _GatePoint(Icons.delete_outline_rounded, 'Delete any document, any time'),
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        if (app.documentDisclosure != null)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+      const SizedBox(height: 16),
+      if (app.documentDisclosure != null)
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: AppCard(
+            padding: EdgeInsets.zero,
+            child: ExpansionTile(
+              shape: const Border(),
+              collapsedShape: const Border(),
+              title: Text('Full disclosure · v${app.documentDisclosure!.version}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
               children: [
-                Text('Disclosure · v${app.documentDisclosure!.version}',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(app.documentDisclosure!.text, style: Theme.of(context).textTheme.bodySmall),
+                Text(app.documentDisclosure!.text, style: const TextStyle(fontSize: 12.5, height: 1.45, color: Colors.white60)),
               ],
             ),
-          )
-        else
-          const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
-        const SizedBox(height: 16),
-        FilledButton(
-          onPressed: app.isLoading ? null : () => context.read<AppState>().grantDocumentConsent(),
-          child: const Text('Allow document storage'),
-        ),
-      ],
-    );
+          ),
+        )
+      else
+        const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
+      const SizedBox(height: 20),
+      GradientButton(
+        label: 'Allow document storage',
+        icon: Icons.check_rounded,
+        loading: app.isLoading,
+        onPressed: app.documentDisclosure == null ? null : () => context.read<AppState>().grantDocumentConsent(),
+      ),
+    ];
   }
-
-  IconData _iconFor(DocumentType type) => switch (type) {
-        DocumentType.governmentId => Icons.badge_outlined,
-        DocumentType.socialSecurityCard => Icons.credit_card,
-        DocumentType.birthCertificate => Icons.description_outlined,
-        DocumentType.other => Icons.insert_drive_file_outlined,
-      };
 
   String _formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
@@ -437,11 +447,14 @@ class _UploadDocumentSheetState extends State<UploadDocumentSheet> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(switch (_step) {
-          _Step.chooseType => 'Add a document',
-          _Step.scanAndLabel => _selectedType!.label,
-          _Step.success => 'Saved',
-        }),
+        title: Text(
+          switch (_step) {
+            _Step.chooseType => 'Add a document',
+            _Step.scanAndLabel => _selectedType!.label,
+            _Step.success => 'Saved',
+          },
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
         leading: switch (_step) {
           _Step.chooseType => IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(context).pop()),
           _Step.scanAndLabel => IconButton(
@@ -452,7 +465,23 @@ class _UploadDocumentSheetState extends State<UploadDocumentSheet> {
         },
         automaticallyImplyLeading: false,
       ),
-      body: switch (_step) {
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 280),
+        switchInCurve: Curves.easeOutCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0.06, 0), end: Offset.zero).animate(animation),
+            child: child,
+          ),
+        ),
+        child: KeyedSubtree(key: ValueKey('$_step-${_selectedType?.name}'), child: _stepBody()),
+      ),
+    );
+  }
+
+  Widget _stepBody() {
+    return switch (_step) {
         _Step.chooseType => _ChooseDocumentTypeStep(
             onSelect: (type) => setState(() {
               _selectedType = type;
@@ -475,8 +504,7 @@ class _UploadDocumentSheetState extends State<UploadDocumentSheet> {
             onAddAnother: () => setState(() => _step = _Step.chooseType),
             onDone: () => Navigator.of(context).pop(),
           ),
-      },
-    );
+    };
   }
 }
 
@@ -488,42 +516,55 @@ class _ChooseDocumentTypeStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
       children: [
-        Text('What are you adding?', style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 12),
-        for (final type in DocumentType.values)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Material(
-              color: Theme.of(context).colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
+        const Padding(
+          padding: EdgeInsets.only(left: 4, bottom: 16),
+          child: Text('What are you adding?', style: TextStyle(fontSize: 17, color: Colors.white70)),
+        ),
+        for (final (i, type) in DocumentType.values.indexed)
+          FadeSlideIn(
+            delay: Duration(milliseconds: 50 * i),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: PressableScale(
                 onTap: () => onSelect(type),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
+                child: Container(
+                  height: 84,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    gradient: LinearGradient(colors: walletColors(type), begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  ),
                   child: Row(
                     children: [
+                      Icon(walletIcon(type), color: Colors.white, size: 30),
+                      const SizedBox(width: 16),
                       Expanded(
                         child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(type.label, style: const TextStyle(fontWeight: FontWeight.w500)),
+                            Text(type.label, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
                             Builder(builder: (context) {
                               final count = app.documents.where((d) => d.type == type).length;
                               return Text(
                                 count > 0 ? '$count on file' : 'Not on file yet',
-                                style: Theme.of(context).textTheme.bodySmall,
+                                style: const TextStyle(color: Colors.white70, fontSize: 13),
                               );
                             }),
                           ],
                         ),
                       ),
                       if (app.documents.any((d) => d.type == type))
-                        const Icon(Icons.check_circle, color: walletGreen, size: 20),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.chevron_right, size: 18),
+                        Container(
+                          width: 28,
+                          height: 28,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: const BoxDecoration(shape: BoxShape.circle, color: walletGreen),
+                          child: const Icon(Icons.check_rounded, size: 18, color: Colors.white),
+                        ),
+                      const Icon(Icons.chevron_right_rounded, color: Colors.white70),
                     ],
                   ),
                 ),
@@ -590,64 +631,71 @@ class _ScanDocumentStepState extends State<_ScanDocumentStep> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
+    final type = widget.documentType;
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
       children: [
-        Row(
-          children: [
-            Icon(_iconForType(widget.documentType), color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 12),
-            Text(widget.documentType.label, style: const TextStyle(fontWeight: FontWeight.w500)),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(documentTip(widget.documentType), style: Theme.of(context).textTheme.bodyMedium),
-        const SizedBox(height: 20),
-        const Text('Label (optional)', style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _labelController,
-          decoration: const InputDecoration(
-            hintText: 'e.g. "Current license"',
-            border: OutlineInputBorder(),
+        FadeSlideIn(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              gradient: LinearGradient(colors: walletColors(type), begin: Alignment.topLeft, end: Alignment.bottomRight),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(walletIcon(type), color: Colors.white, size: 34),
+                const SizedBox(height: 14),
+                Text(documentTip(type), style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.4, fontWeight: FontWeight.w500)),
+              ],
+            ),
           ),
         ),
-        if (_scanError != null) ...[
-          const SizedBox(height: 12),
-          Text(_scanError!, style: const TextStyle(color: Colors.red)),
-        ],
-        const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: app.isUploadingDocument ? null : () => _addFrom(DocumentScannerService.scan),
-          icon: const Icon(Icons.camera_alt_outlined),
-          label: const Text('Scan with camera'),
+        const SizedBox(height: 22),
+        const SectionLabel('Label (optional)'),
+        TextField(
+          controller: _labelController,
+          decoration: const InputDecoration(hintText: 'e.g. "Current license"'),
         ),
-        const SizedBox(height: 8),
+        if (_scanError != null) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: Brand.red.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(16)),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, color: Brand.red),
+                const SizedBox(width: 10),
+                Expanded(child: Text(_scanError!, style: const TextStyle(color: Brand.red, height: 1.3))),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 22),
+        GradientButton(
+          label: 'Scan with camera',
+          icon: Icons.camera_alt_rounded,
+          onPressed: app.isUploadingDocument ? null : () => _addFrom(DocumentScannerService.scan),
+        ),
+        const SizedBox(height: 10),
         OutlinedButton.icon(
           onPressed: app.isUploadingDocument ? null : () => _addFrom(DocumentScannerService.pickFromPhotos),
-          icon: const Icon(Icons.photo_library_outlined),
+          icon: const Icon(Icons.photo_library_rounded),
           label: const Text('Choose from photos'),
         ),
         if (app.isUploadingDocument) ...[
-          const SizedBox(height: 16),
-          const Row(
-            children: [
-              SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-              SizedBox(width: 12),
-              Text('Uploading, encrypting…'),
-            ],
+          const SizedBox(height: 22),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: const LinearProgressIndicator(minHeight: 6, color: Brand.orange, backgroundColor: Brand.surfaceHigh),
           ),
+          const SizedBox(height: 10),
+          const Center(child: Text('Uploading, encrypting…', style: TextStyle(color: Colors.white70))),
         ],
       ],
     );
   }
-
-  IconData _iconForType(DocumentType type) => switch (type) {
-        DocumentType.governmentId => Icons.badge_outlined,
-        DocumentType.socialSecurityCard => Icons.credit_card,
-        DocumentType.birthCertificate => Icons.description_outlined,
-        DocumentType.other => Icons.insert_drive_file_outlined,
-      };
 }
 
 class _UploadSuccessStep extends StatelessWidget {
@@ -666,66 +714,94 @@ class _UploadSuccessStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final missing = missingCoreDocuments(app.documents);
+    final allDone = missing.isEmpty;
 
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    return Stack(
       children: [
-        const SizedBox(height: 16),
-        const Icon(Icons.check_circle, color: walletGreen, size: 64),
-        const SizedBox(height: 16),
-        Text(
-          '${document.type.label} saved',
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        const SizedBox(height: 8),
-        const Text("It's encrypted and ready whenever you need it.", textAlign: TextAlign.center),
-        const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                missing.isEmpty ? 'All done' : '${DocumentType.coreChecklist.length - missing.length} of ${DocumentType.coreChecklist.length} on file',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              for (final type in DocumentType.coreChecklist)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Icon(
-                        missing.contains(type) ? Icons.circle_outlined : Icons.check_circle,
-                        color: missing.contains(type) ? Colors.grey : walletGreen,
-                        size: 22,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(type.label),
-                    ],
+        ListView(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+          children: [
+            const SizedBox(height: 12),
+            Center(
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: 1),
+                duration: const Duration(milliseconds: 700),
+                curve: Curves.elasticOut,
+                builder: (context, v, child) => Transform.scale(scale: v, child: child),
+                child: Container(
+                  width: 92,
+                  height: 92,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: walletGreen,
+                    boxShadow: [BoxShadow(color: walletGreen.withValues(alpha: 0.5), blurRadius: 30, spreadRadius: 2)],
                   ),
+                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 56),
                 ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            Text(
+              '${document.type.label} saved',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "It's encrypted and ready whenever you need it.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 15),
+            ),
+            const SizedBox(height: 26),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    allDone ? 'All done' : '${DocumentType.coreChecklist.length - missing.length} of ${DocumentType.coreChecklist.length} on file',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                  ),
+                  const SizedBox(height: 10),
+                  for (final type in DocumentType.coreChecklist)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: missing.contains(type) ? Colors.transparent : walletGreen,
+                              border: missing.contains(type) ? Border.all(color: Colors.white30, width: 2) : null,
+                            ),
+                            child: missing.contains(type) ? null : const Icon(Icons.check_rounded, size: 17, color: Colors.white),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(type.label, style: TextStyle(fontSize: 16, color: missing.contains(type) ? Colors.white60 : Colors.white)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 26),
+            if (missing.isNotEmpty) ...[
+              GradientButton(
+                label: 'Next: ${missing.first.label}',
+                icon: Icons.arrow_forward_rounded,
+                onPressed: () => onNext(missing.first),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(onPressed: onDone, child: const Text("I'll finish later")),
+            ] else ...[
+              GradientButton(label: 'Done', icon: Icons.check_rounded, onPressed: onDone),
+              const SizedBox(height: 10),
+              OutlinedButton(onPressed: onAddAnother, child: const Text('Add another document')),
             ],
-          ),
+          ],
         ),
-        const SizedBox(height: 24),
-        if (missing.isNotEmpty) ...[
-          FilledButton(
-            onPressed: () => onNext(missing.first),
-            child: Text('Next: ${missing.first.label}'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton(onPressed: onDone, child: const Text("I'll finish later")),
-        ] else ...[
-          FilledButton(onPressed: onDone, child: const Text('Done')),
-          const SizedBox(height: 8),
-          OutlinedButton(onPressed: onAddAnother, child: const Text('Add another document')),
-        ],
+        if (allDone) const Positioned.fill(child: ConfettiBurst()),
       ],
     );
   }
@@ -815,6 +891,26 @@ class _DocumentDetailViewState extends State<DocumentDetailView> {
                       Text('Decrypting…'),
                     ],
                   ),
+      ),
+    );
+  }
+}
+
+class _GatePoint extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _GatePoint(this.icon, this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Brand.orange),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: const TextStyle(color: Colors.white70, height: 1.35))),
+        ],
       ),
     );
   }
