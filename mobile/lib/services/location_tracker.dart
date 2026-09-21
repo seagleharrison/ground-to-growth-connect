@@ -1,0 +1,139 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
+
+import '../models/models.dart';
+import 'api_client.dart';
+import 'secure_storage_service.dart';
+
+/// Direct equivalent of the native app's LocationTracker.swift: reports an
+/// approximate location every 15 minutes while consent is granted, using
+/// geolocator's position stream instead of CLLocationManager directly.
+class LocationTracker extends ChangeNotifier {
+  static const reportInterval = Duration(minutes: 15);
+
+  bool isTracking = false;
+  DateTime? lastReportAt;
+  String? lastError;
+  LocationPermission authorizationStatus = LocationPermission.denied;
+
+  bool _consentGranted = false;
+  DateTime? _lastSentAt;
+  bool _pendingReport = false;
+  StreamSubscription<Position>? _positionSub;
+
+  Future<void> updateConsent({required bool granted}) async {
+    _consentGranted = granted;
+    if (granted) {
+      await _startIfAuthorized();
+    } else {
+      _stopTracking();
+    }
+  }
+
+  Future<void> requestPermission() async {
+    authorizationStatus = await Geolocator.requestPermission();
+    notifyListeners();
+  }
+
+  Future<void> _startIfAuthorized() async {
+    if (!_consentGranted) {
+      _stopTracking();
+      return;
+    }
+
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      lastError = 'Location services are disabled.';
+      notifyListeners();
+      return;
+    }
+
+    var status = await Geolocator.checkPermission();
+    if (status == LocationPermission.denied) {
+      status = await Geolocator.requestPermission();
+    }
+    authorizationStatus = status;
+
+    switch (status) {
+      case LocationPermission.always:
+      case LocationPermission.whileInUse:
+        _beginUpdates();
+      case LocationPermission.denied:
+      case LocationPermission.deniedForever:
+        _stopTracking();
+        lastError = 'Location permission denied. Enable in Settings.';
+      case LocationPermission.unableToDetermine:
+        break;
+    }
+    notifyListeners();
+  }
+
+  void _beginUpdates() {
+    isTracking = true;
+    lastError = null;
+    _positionSub?.cancel();
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.medium,
+        distanceFilter: 100,
+      ),
+    ).listen(
+      (position) => _reportIfNeeded(position),
+      onError: (Object e) {
+        lastError = '$e';
+        notifyListeners();
+      },
+    );
+    Geolocator.getCurrentPosition().then((p) => _reportIfNeeded(p, force: _lastSentAt == null));
+    notifyListeners();
+  }
+
+  void _stopTracking() {
+    _positionSub?.cancel();
+    _positionSub = null;
+    isTracking = false;
+    notifyListeners();
+  }
+
+  Future<void> _reportIfNeeded(Position position, {bool force = false}) async {
+    if (!_consentGranted) return;
+    if (await SecureStorageService.loadToken() == null) return;
+
+    final now = DateTime.now();
+    if (!force && _lastSentAt != null && now.difference(_lastSentAt!) < reportInterval - const Duration(seconds: 5)) {
+      return;
+    }
+    if (_pendingReport) return;
+
+    final previousSentAt = _lastSentAt;
+    _pendingReport = true;
+    _lastSentAt = now;
+
+    final payload = LocationReportPayload(
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracyMeters: position.accuracy >= 0 ? position.accuracy : null,
+      reportedAt: now.toUtc().toIso8601String(),
+    );
+
+    try {
+      final report = await ApiClient.shared.postLocation(payload);
+      lastReportAt = DateTime.tryParse(report.reportedAt) ?? now;
+      lastError = null;
+    } catch (e) {
+      // Roll back so the next update can retry this interval.
+      _lastSentAt = previousSentAt;
+      lastError = '$e';
+    } finally {
+      _pendingReport = false;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    super.dispose();
+  }
+}
