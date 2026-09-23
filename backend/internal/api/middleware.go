@@ -9,7 +9,7 @@ import (
 	"ground-to-growth-connect-backend/internal/cryptox"
 )
 
-var staffTypes = map[string]bool{"volunteer": true, "employee": true, "admin": true}
+var staffTypes = map[string]bool{"volunteer": true, "admin": true}
 
 const (
 	consentTypeLocation  = "location_sharing"

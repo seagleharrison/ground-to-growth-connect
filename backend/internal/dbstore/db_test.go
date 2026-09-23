@@ -131,3 +131,44 @@ func TestMigrateUpgradesAnExistingDatabase(t *testing.T) {
 		t.Fatalf("existing user should survive the upgrade (n=%d, err=%v)", n, err)
 	}
 }
+
+func TestMigrateTurnsRetiredEmployeesIntoVolunteers(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "old.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// An older database that still has an employee (and other roles) in it.
+	if _, err := db.Exec(`CREATE TABLE users (
+		id TEXT PRIMARY KEY,
+		person_type TEXT NOT NULL DEFAULT 'homeless',
+		name_encrypted BLOB NOT NULL,
+		email_encrypted BLOB, gender_encrypted BLOB, phone_encrypted BLOB,
+		profile_picture_key TEXT, profile_picture_mime TEXT,
+		token_hash TEXT NOT NULL UNIQUE,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	for id, role := range map[string]string{"e1": "employee", "v1": "volunteer", "a1": "admin", "p1": "homeless"} {
+		if _, err := db.Exec(`INSERT INTO users (id, person_type, name_encrypted, token_hash) VALUES (?, ?, x'00', ?)`, id, role, "hash-"+id); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	schema := readSchema(t)
+	for i := 0; i < 2; i++ { // idempotent
+		if err := Migrate(db, schema); err != nil {
+			t.Fatalf("Migrate run %d: %v", i+1, err)
+		}
+	}
+
+	want := map[string]string{"e1": "volunteer", "v1": "volunteer", "a1": "admin", "p1": "homeless"}
+	for id, role := range want {
+		var got string
+		if err := db.QueryRow(`SELECT person_type FROM users WHERE id = ?`, id).Scan(&got); err != nil || got != role {
+			t.Fatalf("user %s: expected %s, got %q (err %v)", id, role, got, err)
+		}
+	}
+}

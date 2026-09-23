@@ -8,7 +8,7 @@ import (
 
 type analyticsPayload struct {
 	People struct {
-		Participants, Volunteers, Employees, Admins int
+		Participants, Volunteers, Admins int
 	}
 	Sharing struct {
 		ParticipantsSharing, ActiveLast24Hours, ActiveLast7Days int
@@ -37,13 +37,12 @@ func TestAnalyticsIsAdminOnly(t *testing.T) {
 	h := newTestServer(t)
 	participant, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	volunteer, _ := registerUser(t, h, map[string]interface{}{"name": "Vic", "personType": "volunteer", "staffCode": testStaffCode})
-	employee, _ := registerUser(t, h, map[string]interface{}{"name": "Emma", "personType": "employee", "staffCode": testStaffCode})
 	admin, _ := registerUser(t, h, map[string]interface{}{"name": "Ada", "personType": "admin", "staffCode": testStaffCode})
 
 	if code := doRequest(t, h, http.MethodGet, "/api/analytics", "", nil).Code; code != http.StatusUnauthorized {
 		t.Fatalf("no token: expected 401, got %d", code)
 	}
-	for name, token := range map[string]string{"participant": participant, "volunteer": volunteer, "employee": employee} {
+	for name, token := range map[string]string{"participant": participant, "volunteer": volunteer} {
 		if code := doRequest(t, h, http.MethodGet, "/api/analytics", token, nil).Code; code != http.StatusForbidden {
 			t.Fatalf("%s: expected 403, got %d", name, code)
 		}
@@ -81,7 +80,7 @@ func TestAnalyticsCountsPeopleSharingAndActivity(t *testing.T) {
 	}
 
 	a := getAnalytics(t, h, admin)
-	if a.People.Participants != 2 || a.People.Volunteers != 1 || a.People.Admins != 1 || a.People.Employees != 0 {
+	if a.People.Participants != 2 || a.People.Volunteers != 1 || a.People.Admins != 1 {
 		t.Fatalf("unexpected people counts: %+v", a.People)
 	}
 	if a.Sharing.ParticipantsSharing != 1 {

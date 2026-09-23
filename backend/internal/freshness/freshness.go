@@ -155,10 +155,22 @@ type Report struct {
 	Total          int         `json:"total"`
 	LastCheckedAt  string      `json:"lastCheckedAt"`
 	NeedsAttention []Attention `json:"needsAttention"`
+
+	// CannotCheck lists pages whose websites refuse automated visitors (many
+	// government sites do this to everything that isn't a person with a
+	// browser). That says nothing about whether the page is fine, so they aren't
+	// counted as problems; an admin can open them now and then to confirm.
+	CannotCheck []Attention `json:"cannotCheck"`
+}
+
+// refusesAutomatedVisitors reports whether an HTTP status is a site turning our
+// checker away rather than saying the page is gone.
+func refusesAutomatedVisitors(status int) bool {
+	return status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusTooManyRequests
 }
 
 func BuildReport(db *sql.DB) (Report, error) {
-	rep := Report{NeedsAttention: []Attention{}}
+	rep := Report{NeedsAttention: []Attention{}, CannotCheck: []Attention{}}
 	rows, err := db.Query(`
 		SELECT url, status, COALESCE(error, ''), content_hash, reviewed_hash, acknowledged_status, checked_at
 		FROM source_checks ORDER BY url`)
@@ -179,6 +191,8 @@ func BuildReport(db *sql.DB) (Report, error) {
 			rep.LastCheckedAt = checkedAt
 		}
 		switch {
+		case refusesAutomatedVisitors(status):
+			rep.CannotCheck = append(rep.CannotCheck, Attention{url, fmt.Sprintf("This website turns away automatic checks (HTTP %d), so we can't tell if it changed. Open it now and then to make sure it still looks right.", status), status, checkedAt})
 		case (status < 200 || status >= 300) && !(acked.Valid && int(acked.Int64) == status):
 			reason := fmt.Sprintf("Page returned an error (HTTP %d). It may have moved or been taken down.", status)
 			if status == 0 {

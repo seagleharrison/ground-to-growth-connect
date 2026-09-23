@@ -51,7 +51,11 @@ func TestResourcesArePublicAndCacheable(t *testing.T) {
 }
 
 type sourceReport struct {
-	Total          int `json:"total"`
+	Total       int `json:"total"`
+	CannotCheck []struct {
+		URL    string `json:"url"`
+		Status int    `json:"status"`
+	} `json:"cannotCheck"`
 	NeedsAttention []struct {
 		URL    string `json:"url"`
 		Reason string `json:"reason"`
@@ -98,6 +102,9 @@ func TestAdminSeesFlaggedPagesAndCanClearThem(t *testing.T) {
 	mustExec(`INSERT INTO source_checks (url, status, checked_at, first_checked_at)
 	          VALUES ('https://example.org/gone', 404, '2026-09-21T00:00:00.000Z', '2026-09-01T00:00:00.000Z')`)
 
+	mustExec(`INSERT INTO source_checks (url, status, checked_at, first_checked_at)
+	          VALUES ('https://example.org/blocks-bots', 403, '2026-09-21T00:00:00.000Z', '2026-09-01T00:00:00.000Z')`)
+
 	get := func() sourceReport {
 		rec := doRequest(t, h, http.MethodGet, "/api/analytics/sources", admin, nil)
 		if rec.Code != http.StatusOK {
@@ -109,8 +116,11 @@ func TestAdminSeesFlaggedPagesAndCanClearThem(t *testing.T) {
 	}
 
 	r := get()
-	if r.Total != 3 || len(r.NeedsAttention) != 2 {
-		t.Fatalf("expected 3 watched and 2 flagged, got %+v", r)
+	if r.Total != 4 || len(r.NeedsAttention) != 2 {
+		t.Fatalf("expected 4 watched and 2 flagged, got %+v", r)
+	}
+	if len(r.CannotCheck) != 1 || r.CannotCheck[0].URL != "https://example.org/blocks-bots" {
+		t.Fatalf("the site that blocks automatic checks belongs in its own list: %+v", r)
 	}
 
 	for _, url := range []string{"https://example.org/changed", "https://example.org/gone"} {

@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
     lower(hex(randomblob(6)))
   ),
   person_type TEXT NOT NULL DEFAULT 'homeless'
-    CHECK (person_type IN ('homeless', 'volunteer', 'employee', 'admin')),
+    CHECK (person_type IN ('homeless', 'volunteer', 'admin')),
   -- PII is encrypted at rest (AES-256-GCM); stored as BLOBs.
   name_encrypted BLOB NOT NULL,
   email_encrypted BLOB,

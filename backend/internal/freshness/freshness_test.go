@@ -170,3 +170,40 @@ func TestLoopRunsAndStops(t *testing.T) {
 		t.Fatal("Loop did not stop when its context ended")
 	}
 }
+
+func TestSitesThatRefuseAutomaticChecksAreNotReportedAsBroken(t *testing.T) {
+	for _, status := range []int{401, 403, 429} {
+		db := testDB(t)
+		s := newSite(t, "Access Denied")
+		s.status = status
+		run(t, db, s.srv.URL)
+
+		r := report(t, db)
+		if len(r.NeedsAttention) != 0 {
+			t.Fatalf("HTTP %d means the site turned our checker away, not that the page is gone: %+v", status, r)
+		}
+		if len(r.CannotCheck) != 1 || r.CannotCheck[0].Status != status || r.CannotCheck[0].URL != s.srv.URL {
+			t.Fatalf("HTTP %d should be listed as something we can't check: %+v", status, r)
+		}
+		if r.Total != 1 {
+			t.Fatalf("it is still one of the watched pages: %+v", r)
+		}
+	}
+}
+
+func TestARealMissingPageIsStillFlaggedNextToBlockedOnes(t *testing.T) {
+	db := testDB(t)
+	blocked := newSite(t, "Access Denied")
+	blocked.status = 403
+	gone := newSite(t, "Not found")
+	gone.status = 404
+	run(t, db, blocked.srv.URL, gone.srv.URL)
+
+	r := report(t, db)
+	if len(r.NeedsAttention) != 1 || r.NeedsAttention[0].URL != gone.srv.URL {
+		t.Fatalf("only the 404 should need attention: %+v", r)
+	}
+	if len(r.CannotCheck) != 1 || r.CannotCheck[0].URL != blocked.srv.URL {
+		t.Fatalf("the 403 should be listed as uncheckable: %+v", r)
+	}
+}

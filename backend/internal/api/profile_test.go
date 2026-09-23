@@ -391,11 +391,11 @@ func TestChangeToStaffWithTheRightCode(t *testing.T) {
 	h := newTestServer(t)
 	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 
-	updated := patchMe(t, h, token, map[string]interface{}{"personType": "employee", "staffCode": testStaffCode})
-	if updated["personType"] != "employee" || updated["isStaff"] != true {
-		t.Fatalf("expected an employee, got %v", updated)
+	updated := patchMe(t, h, token, map[string]interface{}{"personType": "volunteer", "staffCode": testStaffCode})
+	if updated["personType"] != "volunteer" || updated["isStaff"] != true {
+		t.Fatalf("expected a volunteer, got %v", updated)
 	}
-	if got := getMe(t, h, token); got["personType"] != "employee" {
+	if got := getMe(t, h, token); got["personType"] != "volunteer" {
 		t.Fatalf("change did not persist: %v", got)
 	}
 	if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", token, nil).Code; code != http.StatusOK {
@@ -460,5 +460,26 @@ func TestBecomingStaffStopsLocationSharing(t *testing.T) {
 	decodeJSON(t, rec, &status)
 	if status["granted"] != false {
 		t.Fatalf("switching back must not silently resume sharing: %v", status)
+	}
+}
+
+func TestEmployeeIsNoLongerAnAccountType(t *testing.T) {
+	h := newTestServer(t)
+
+	// Signing up as an employee is refused.
+	rec := doRequest(t, h, http.MethodPost, "/api/users", "", map[string]interface{}{
+		"name": "Emma", "personType": "employee", "staffCode": testStaffCode,
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("sign-up as employee: expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// So is switching to it, even with the right code.
+	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	if code := patchMeStatus(t, h, token, map[string]interface{}{"personType": "employee", "staffCode": testStaffCode}); code != http.StatusBadRequest {
+		t.Fatalf("switch to employee: expected 400, got %d", code)
+	}
+	if me := getMe(t, h, token); me["personType"] != "homeless" {
+		t.Fatalf("a refused switch must change nothing: %v", me)
 	}
 }

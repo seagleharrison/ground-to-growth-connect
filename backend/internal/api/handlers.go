@@ -15,7 +15,7 @@ import (
 	"ground-to-growth-connect-backend/internal/cryptox"
 )
 
-var personTypes = []string{"homeless", "volunteer", "employee", "admin"}
+var personTypes = []string{"homeless", "volunteer", "admin"}
 var genders = []string{"female", "male", "nonbinary", "other", "prefer_not_to_say"}
 
 func contains(list []string, v string) bool {

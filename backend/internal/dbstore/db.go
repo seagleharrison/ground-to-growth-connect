@@ -48,6 +48,13 @@ func Migrate(db *sql.DB, migrationSQL string) error {
 			return err
 		}
 	}
+	// The "employee" role was retired. Anyone who had it becomes a volunteer,
+	// which has the same access, so nobody is locked out. (Older databases
+	// still allow the value in their table definition, so this is safe to run
+	// on every start.)
+	if _, err := db.Exec(`UPDATE users SET person_type = 'volunteer' WHERE person_type = 'employee'`); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -16,7 +16,6 @@ const analyticsZone = "America/New_York"
 type analyticsPeople struct {
 	Participants int `json:"participants"`
 	Volunteers   int `json:"volunteers"`
-	Employees    int `json:"employees"`
 	Admins       int `json:"admins"`
 }
 
@@ -47,7 +46,7 @@ type analyticsResponse struct {
 }
 
 // withAdmin lets only admin accounts through. Staff roles (volunteer,
-// employee) can see the map but not the organization-wide numbers.
+// volunteers) can see the map but not the organization-wide numbers.
 func (s *Server) withAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if userFromCtx(r).PersonType != "admin" {
@@ -83,7 +82,6 @@ func (s *Server) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 
 	ok := count(&out.People.Participants, `SELECT COUNT(*) FROM users WHERE person_type = 'homeless'`) &&
 		count(&out.People.Volunteers, `SELECT COUNT(*) FROM users WHERE person_type = 'volunteer'`) &&
-		count(&out.People.Employees, `SELECT COUNT(*) FROM users WHERE person_type = 'employee'`) &&
 		count(&out.People.Admins, `SELECT COUNT(*) FROM users WHERE person_type = 'admin'`) &&
 		count(&out.Sharing.ParticipantsSharing,
 			`SELECT COUNT(*) FROM user_consent_status cs JOIN users u ON u.id = cs.user_id
