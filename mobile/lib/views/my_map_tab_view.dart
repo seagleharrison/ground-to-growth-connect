@@ -404,6 +404,11 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
   // MARK: panels
 
   Widget _emptyPanel(BuildContext context) {
+    // Sharing can be on with nothing here yet (the first check-in can take up
+    // to 15 minutes, or hasn't gone through — e.g. Location Services being off
+    // for the app). Telling someone in that case to "turn on sharing" when
+    // it's already on is confusing, so the two situations read differently.
+    final sharing = context.watch<AppState>().consent?.granted == true;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -414,22 +419,31 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
               width: 46,
               height: 46,
               decoration: BoxDecoration(color: Brand.orange.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(16)),
-              child: const Icon(Icons.route_rounded, color: Brand.orange),
+              child: Icon(sharing ? Icons.schedule_rounded : Icons.route_rounded, color: Brand.orange),
             ),
             const SizedBox(width: 14),
-            const Expanded(child: Text('Your journey will show up here', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+            Expanded(
+              child: Text(
+                sharing ? 'Waiting for your first check-in' : 'Your journey will show up here',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 10),
-        const Text(
-          'Once location sharing is on, each check-in is added to this map so you can look back at where you have been.',
-          style: TextStyle(color: Colors.white70, height: 1.4),
+        Text(
+          sharing
+              ? "Sharing is on. It can take up to 15 minutes for your first check-in to show up here. If it's been longer, make sure Location Services is turned on for this app in your phone's Settings."
+              : 'Once location sharing is on, each check-in is added to this map so you can look back at where you have been.',
+          style: const TextStyle(color: Colors.white70, height: 1.4),
         ),
-        const SizedBox(height: 14),
-        OutlinedButton(
-          onPressed: () => context.read<TabNav>().go(AppTab.home),
-          child: const Text('Go to Home to turn on sharing'),
-        ),
+        if (!sharing) ...[
+          const SizedBox(height: 14),
+          OutlinedButton(
+            onPressed: () => context.read<TabNav>().go(AppTab.home),
+            child: const Text('Go to Home to turn on sharing'),
+          ),
+        ],
       ],
     );
   }
