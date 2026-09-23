@@ -73,6 +73,15 @@ class FakeApi {
   String? pictureBase64;
   String? pictureMime;
 
+  /// The current recovery code for this account. Tests can set it before
+  /// registering/recovering; POST /api/me/recovery-code replaces it.
+  String recoveryCode = 'G7K4-9XPQ-3RTM';
+  int recoveryCodeRegenerations = 0;
+
+  /// When set, POST /api/users fails with this error message and status.
+  String? failRegisterWith;
+  int failRegisterStatus = 400;
+
   late final MockClient client = MockClient(_handle);
 
   /// Only for taking design screenshots: lets real map tiles download instead
@@ -88,6 +97,46 @@ class FakeApi {
     }
     final route = '${request.method} ${request.url.path}';
     routes.add(route);
+
+    if (route == 'POST /api/users') {
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      if (failRegisterWith != null) return _json({'error': failRegisterWith}, status: failRegisterStatus);
+      final name = (body['name'] as String? ?? '').trim();
+      if (name.isEmpty) return _json({'error': 'name is required'}, status: 400);
+      final phone = (body['phone'] as String? ?? '').trim();
+      if (phone.isEmpty) return _json({'error': 'phone is required'}, status: 400);
+      final personType = (body['personType'] as String?) ?? 'homeless';
+      if (personType != 'homeless' && body['staffCode'] != staffCode) {
+        return _json({'error': 'A valid staff invite code is required for staff accounts.'}, status: 403);
+      }
+      user = {
+        'id': 'u1',
+        'personType': personType,
+        'name': name,
+        'email': (body['email'] as String?)?.isEmpty == true ? null : body['email'],
+        'phone': phone,
+        'gender': body['gender'],
+        'isStaff': personType != 'homeless',
+        'hasProfilePicture': false,
+      };
+      return _json({'user': user, 'token': 'tok-${user['id']}', 'recoveryCode': recoveryCode}, status: 201);
+    }
+
+    if (route == 'POST /api/recover') {
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      final entered = _normalizeCode(body['code'] as String? ?? '');
+      if (entered.isEmpty) return _json({'error': 'code is required'}, status: 400);
+      if (entered != _normalizeCode(recoveryCode)) {
+        return _json({'error': "That recovery code doesn't match any account."}, status: 404);
+      }
+      return _json({'user': user, 'token': 'tok-recovered'});
+    }
+
+    if (route == 'POST /api/me/recovery-code') {
+      recoveryCodeRegenerations++;
+      recoveryCode = 'NEW$recoveryCodeRegenerations-CODE-CODE';
+      return _json({'recoveryCode': recoveryCode});
+    }
 
     // GET /api/documents/{id}: hand back the stored file (a real 1x1 PNG).
     final docMatch = RegExp(r'^/api/documents/(d\d+)$').firstMatch(request.url.path);
@@ -183,6 +232,8 @@ class FakeApi {
         return _json({'locations': staffLocations});
       case 'GET /api/documents/on-file':
         return _json({'participants': documentsOnFile});
+      case 'GET /api/consent/disclosure':
+        return _json({'version': '1.0', 'text': 'Location sharing disclosure text.'});
       case 'GET /api/consent/documents/disclosure':
         return _json({'version': '1.0', 'text': 'Document storage disclosure text.'});
       case 'GET /api/consent/documents/status':
@@ -208,6 +259,8 @@ class FakeApi {
     }
     return _json({'error': 'No fake for $route'}, status: 404);
   }
+
+  String _normalizeCode(String code) => code.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
   http.Response _json(Object body, {int status = 200}) =>
       http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});

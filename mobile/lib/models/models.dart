@@ -141,13 +141,33 @@ class RegisterResponse {
   final String token;
   final String? message;
 
-  RegisterResponse({required this.user, required this.token, this.message});
+  /// Shown once, at sign-up: the only way back into this account if the
+  /// person signs out, loses their phone, or gets a new number. It is never
+  /// sent again after this — write it down or lose it for good.
+  final String? recoveryCode;
+
+  RegisterResponse({required this.user, required this.token, this.message, this.recoveryCode});
 
   factory RegisterResponse.fromJson(Map<String, dynamic> json) =>
       RegisterResponse(
         user: User.fromJson(json['user'] as Map<String, dynamic>),
         token: json['token'] as String,
         message: json['message'] as String?,
+        recoveryCode: json['recoveryCode'] as String?,
+      );
+}
+
+/// The response to entering a recovery code: back in on the same account,
+/// with a fresh token (any other device using the old one is signed out).
+class RecoverResponse {
+  final User user;
+  final String token;
+
+  RecoverResponse({required this.user, required this.token});
+
+  factory RecoverResponse.fromJson(Map<String, dynamic> json) => RecoverResponse(
+        user: User.fromJson(json['user'] as Map<String, dynamic>),
+        token: json['token'] as String,
       );
 }
 

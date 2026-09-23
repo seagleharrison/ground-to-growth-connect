@@ -173,6 +173,20 @@ class _SettingsViewState extends State<SettingsView> {
 
         const SectionLabel('Account'),
         OutlinedButton.icon(
+          key: const Key('get-new-recovery-code'),
+          onPressed: app.isSavingProfile ? null : () => _confirmNewRecoveryCode(context, app),
+          icon: const Icon(Icons.key_rounded),
+          label: const Text('Get a new recovery code'),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(4, 8, 4, 16),
+          child: Text(
+            "There's no password on this app — a recovery code is the only way back in if you lose your phone or change your number. "
+            "Get a new one if you've lost the one you saved before.",
+            style: TextStyle(color: Colors.white54, fontSize: 12.5, height: 1.4),
+          ),
+        ),
+        OutlinedButton.icon(
           onPressed: app.signOut,
           icon: const Icon(Icons.logout_rounded),
           label: const Text('Sign out'),
@@ -285,6 +299,31 @@ class _SettingsViewState extends State<SettingsView> {
       ],
     ),
   );
+
+  Future<void> _confirmNewRecoveryCode(BuildContext context, AppState app) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Brand.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Get a new recovery code?'),
+        content: const Text(
+          "Your old recovery code will stop working right away. You'll need to save the new one.",
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continue')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await app.regenerateRecoveryCode();
+    if (error != null) {
+      messenger.showSnackBar(SnackBar(content: Text(error)));
+    }
+    // On success, RootView shows RecoveryCodeView on its own.
+  }
 
   Future<void> _confirmDelete(BuildContext context, AppState app) async {
     final confirmed = await showDialog<bool>(

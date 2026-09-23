@@ -8,6 +8,7 @@ import 'util/time.dart';
 import 'widgets/ui.dart';
 import 'services/biometric_auth.dart';
 import 'views/main_tab_view.dart';
+import 'views/recovery_code_view.dart';
 import 'views/register_view.dart';
 
 void main() {
@@ -90,7 +91,21 @@ class _RootViewState extends State<RootView> with WidgetsBindingObserver {
       return const RegisterView();
     }
 
-    return app.isUnlocked ? const MainTabView() : const LockedView();
+    if (!app.isUnlocked) {
+      // A recovery code is as sensitive as a password — Face ID comes first
+      // even if one is waiting to be shown (e.g. the app got backgrounded
+      // and locked before "I've saved it" was tapped).
+      return const LockedView();
+    }
+
+    // A pending recovery code (fresh from sign-up, or just regenerated in
+    // Settings) must be acknowledged before anything else — there's no
+    // password, so once it's dismissed it can never be shown again.
+    if (app.pendingRecoveryCode != null) {
+      return const RecoveryCodeView();
+    }
+
+    return const MainTabView();
   }
 }
 

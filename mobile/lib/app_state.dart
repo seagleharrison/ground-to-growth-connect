@@ -100,6 +100,12 @@ class AppState extends ChangeNotifier {
   /// welcome card on Home.
   bool showWelcome = false;
 
+  /// Set right after sign-up (or after generating a fresh code from
+  /// Settings), until the person confirms they've saved it. While set, this
+  /// takes over the screen ahead of anything else signed-in — there's no
+  /// password, so this code is the only way back into the account.
+  String? pendingRecoveryCode;
+
   /// True while the stored session is still being read from secure storage
   /// on cold launch — the root widget shows a splash until this clears.
   bool isInitializing = true;
@@ -303,12 +309,60 @@ class AppState extends ChangeNotifier {
       hiddenDocuments = {};
       isUnlocked = true; // they just proved presence by registering on this device
       showWelcome = true;
+      pendingRecoveryCode = response.recoveryCode;
       HapticFeedback.mediumImpact();
       await refreshSession();
     } catch (e) {
       errorMessage = '$e';
     }
     isLoading = false;
+    notifyListeners();
+  }
+
+  /// Signs back into an existing account using the recovery code shown once
+  /// at sign-up. Returns null on success, or a message to show.
+  Future<String?> recover(String code) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await ApiClient.shared.recover(code);
+      await SecureStorageService.saveToken(response.token);
+      await SecureStorageService.saveUser(response.user);
+      user = response.user;
+      hiddenDocuments = {};
+      isUnlocked = true; // they just proved presence by typing the code on this device
+      HapticFeedback.mediumImpact();
+      await refreshSession();
+      return null;
+    } catch (e) {
+      return '$e';
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Replaces the recovery code with a new one (e.g. the old one was lost),
+  /// shown once more the same way as at sign-up. Returns null on success.
+  Future<String?> regenerateRecoveryCode() async {
+    isSavingProfile = true;
+    notifyListeners();
+    try {
+      pendingRecoveryCode = await ApiClient.shared.regenerateRecoveryCode();
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return '$e';
+    } finally {
+      isSavingProfile = false;
+      notifyListeners();
+    }
+  }
+
+  /// The person has confirmed they saved the code shown on screen.
+  void acknowledgeRecoveryCode() {
+    pendingRecoveryCode = null;
     notifyListeners();
   }
 
@@ -569,6 +623,7 @@ class AppState extends ChangeNotifier {
     documents = [];
     isUnlocked = false;
     showWelcome = false;
+    pendingRecoveryCode = null;
     notifyListeners();
   }
 

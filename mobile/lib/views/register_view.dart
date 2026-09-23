@@ -5,6 +5,7 @@ import '../app_state.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ui.dart';
+import 'recover_account_view.dart';
 
 class RegisterView extends StatefulWidget {
   const RegisterView({super.key});
@@ -118,7 +119,15 @@ class _RegisterViewState extends State<RegisterView> {
                     onPressed: _canSubmit(app) ? () => _submit(app) : null,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton(
+                    key: const Key('go-to-recover'),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RecoverAccountView())),
+                    child: const Text('I already have an account', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(height: 4),
                 const Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

@@ -24,6 +24,25 @@ class ApiClient {
     return RegisterResponse.fromJson(json);
   }
 
+  /// Signs back into an existing account with only the recovery code shown
+  /// once at sign-up — for a lost or replaced phone, or a changed number.
+  Future<RecoverResponse> recover(String code) async {
+    final json = await _request(
+      path: '/api/recover',
+      method: 'POST',
+      body: {'code': code},
+      authenticated: false,
+    );
+    return RecoverResponse.fromJson(json);
+  }
+
+  /// Replaces the account's recovery code (e.g. the old one was lost) and
+  /// returns the new one. The old code stops working immediately.
+  Future<String> regenerateRecoveryCode() async {
+    final json = await _request(path: '/api/me/recovery-code', method: 'POST');
+    return json['recoveryCode'] as String;
+  }
+
   Future<User> fetchMe() async {
     final json = await _request(path: '/api/me');
     return User.fromJson(json['user'] as Map<String, dynamic>);
