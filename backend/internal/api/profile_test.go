@@ -75,14 +75,14 @@ func TestUpdateProfileEmptyStringClearsOptionalFields(t *testing.T) {
 		"name": "Jane Doe", "email": "jane@example.org", "phone": "912-555-0100", "gender": "female",
 	})
 
-	patchMe(t, h, token, map[string]interface{}{"email": "", "phone": "  ", "gender": ""})
+	patchMe(t, h, token, map[string]interface{}{"email": "", "gender": ""})
 
 	me := getMe(t, h, token)
-	if me["email"] != nil || me["phone"] != nil || me["gender"] != nil {
-		t.Fatalf("expected email/phone/gender cleared, got %v", me)
+	if me["email"] != nil || me["gender"] != nil {
+		t.Fatalf("expected email/gender cleared, got %v", me)
 	}
-	if me["name"] != "Jane Doe" {
-		t.Fatalf("name must be unaffected, got %v", me["name"])
+	if me["name"] != "Jane Doe" || me["phone"] != "912-555-0100" {
+		t.Fatalf("name and phone (not optional) must be unaffected, got %v", me)
 	}
 }
 
@@ -95,6 +95,7 @@ func TestUpdateProfileValidation(t *testing.T) {
 		body map[string]interface{}
 	}{
 		{"empty name", map[string]interface{}{"name": "   "}},
+		{"empty phone", map[string]interface{}{"phone": "  "}},
 		{"unknown gender", map[string]interface{}{"gender": "banana"}},
 	} {
 		rec := doRequest(t, h, http.MethodPatch, "/api/me", token, tc.body)
@@ -103,8 +104,9 @@ func TestUpdateProfileValidation(t *testing.T) {
 		}
 	}
 
-	if getMe(t, h, token)["name"] != "Jane Doe" {
-		t.Fatal("a rejected update must not change anything")
+	me := getMe(t, h, token)
+	if me["name"] != "Jane Doe" || me["phone"] != "912-555-0100" {
+		t.Fatalf("a rejected update must not change anything, got %v", me)
 	}
 }
 
@@ -468,7 +470,7 @@ func TestEmployeeIsNoLongerAnAccountType(t *testing.T) {
 
 	// Signing up as an employee is refused.
 	rec := doRequest(t, h, http.MethodPost, "/api/users", "", map[string]interface{}{
-		"name": "Emma", "personType": "employee", "staffCode": testStaffCode,
+		"name": "Emma", "phone": "912-555-0100", "personType": "employee", "staffCode": testStaffCode,
 	})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("sign-up as employee: expected 400, got %d: %s", rec.Code, rec.Body.String())

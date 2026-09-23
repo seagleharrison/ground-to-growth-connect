@@ -100,6 +100,9 @@ func decodeJSON(t *testing.T, rec *httptest.ResponseRecorder, v interface{}) {
 // and don't care about the registration response shape themselves.
 func registerUser(t *testing.T, h http.Handler, payload map[string]interface{}) (token string, user map[string]interface{}) {
 	t.Helper()
+	if _, ok := payload["phone"]; !ok {
+		payload["phone"] = "912-555-0100"
+	}
 	rec := doRequest(t, h, http.MethodPost, "/api/users", "", payload)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("register: expected 201, got %d: %s", rec.Code, rec.Body.String())

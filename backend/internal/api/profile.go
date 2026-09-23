@@ -29,8 +29,8 @@ func profilePictureKey(userID string) string {
 }
 
 // updateProfileRequest uses pointers so that an omitted field means "leave
-// this alone" while an empty string means "clear it" (for the optional
-// fields).
+// this alone" while an empty string means "clear it" (email and gender are
+// optional; name and phone can't be emptied, same as at sign-up).
 //
 // PersonType changes the account type. Account type decides who can see other
 // people's locations, so moving *into* a staff role needs the same staff invite
@@ -101,13 +101,15 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if body.Phone != nil {
-		phoneEnc = nil
-		if p := strings.TrimSpace(*body.Phone); p != "" {
-			p = truncateRunes(p, 40)
-			if phoneEnc, err = cryptox.EncryptString(&p); err != nil {
-				writeInternalError(w, err)
-				return
-			}
+		p := strings.TrimSpace(*body.Phone)
+		if p == "" {
+			writeError(w, http.StatusBadRequest, "phone cannot be empty")
+			return
+		}
+		p = truncateRunes(p, 40)
+		if phoneEnc, err = cryptox.EncryptString(&p); err != nil {
+			writeInternalError(w, err)
+			return
 		}
 	}
 

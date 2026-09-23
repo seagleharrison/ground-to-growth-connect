@@ -140,6 +140,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
+	if strings.TrimSpace(body.Phone) == "" {
+		writeError(w, http.StatusBadRequest, "phone is required")
+		return
+	}
 
 	personType := body.PersonType
 	if personType == "" {
@@ -534,6 +538,7 @@ type userLocationJSON struct {
 }
 
 func (s *Server) handleLatestLocations(w http.ResponseWriter, r *http.Request) {
+	viewer := userFromCtx(r)
 	rows, err := s.db.Query(`
 		SELECT user_id, name_encrypted, person_type, latitude_encrypted, longitude_encrypted,
 		       accuracy_meters, reported_at
@@ -555,9 +560,12 @@ func (s *Server) handleLatestLocations(w http.ResponseWriter, r *http.Request) {
 		  FROM location_reports lr
 		  JOIN users u ON u.id = lr.user_id
 		  JOIN user_consent_status cs ON cs.user_id = u.id AND cs.granted = 1
-		  WHERE u.person_type = 'homeless'
+		  -- Everyone who is sharing shows up here: participants, and staff who
+		  -- turned on their own sharing so other staff can find them in the
+		  -- field. A person never sees themselves in this list.
+		  WHERE u.id != ?
 		)
-		WHERE rn = 1`)
+		WHERE rn = 1`, viewer.ID)
 	if err != nil {
 		writeInternalError(w, err)
 		return
