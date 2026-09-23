@@ -42,6 +42,7 @@ class LocationTracker extends ChangeNotifier {
   DateTime? _lastSentAt;
   bool _pendingReport = false;
   StreamSubscription<Position>? _positionSub;
+  Timer? _periodicTimer;
 
   Future<void> updateConsent({required bool granted}) async {
     _consentGranted = granted;
@@ -104,6 +105,11 @@ class LocationTracker extends ChangeNotifier {
     _positionSub?.cancel();
     _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
+        // The distance filter alone only reports when someone actually
+        // moves 100m+ — someone staying in one place (sleeping rough, at a
+        // day center, or just not walking around) would otherwise never
+        // check in again after the first report. The periodic timer below
+        // is what actually guarantees the every-15-minutes promise.
         accuracy: LocationAccuracy.medium,
         distanceFilter: 100,
       ),
@@ -120,12 +126,31 @@ class LocationTracker extends ChangeNotifier {
       },
     );
     Geolocator.getCurrentPosition().then((p) => _reportIfNeeded(p, force: _lastSentAt == null));
+
+    // Whether or not the device is moving, check in on schedule: this is
+    // what makes "every 15 minutes" actually true, not just "every 15
+    // minutes if you happen to also be walking around".
+    _periodicTimer?.cancel();
+    _periodicTimer = Timer.periodic(reportInterval, (_) => _periodicCheckIn());
     notifyListeners();
+  }
+
+  Future<void> _periodicCheckIn() async {
+    if (!_consentGranted) return;
+    try {
+      final position = await Geolocator.getCurrentPosition();
+      await _reportIfNeeded(position, force: true);
+    } catch (e) {
+      lastError = friendlyLocationError(e);
+      notifyListeners();
+    }
   }
 
   void _stopTracking() {
     _positionSub?.cancel();
     _positionSub = null;
+    _periodicTimer?.cancel();
+    _periodicTimer = null;
     isTracking = false;
     notifyListeners();
   }
@@ -168,6 +193,7 @@ class LocationTracker extends ChangeNotifier {
   @override
   void dispose() {
     _positionSub?.cancel();
+    _periodicTimer?.cancel();
     super.dispose();
   }
 }
