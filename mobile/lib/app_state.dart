@@ -59,6 +59,43 @@ class AppState extends ChangeNotifier {
   /// presence by typing on the device.
   bool isUnlocked = false;
 
+  /// An admin looking at the app the way volunteers or participants see it. Only
+  /// changes what's shown: the account and what the server allows stay the same.
+  AppView? previewView;
+
+  /// Set when a preview blocks something that would really change data (turning
+  /// on location sharing, uploading a document); the screen shows it once.
+  String? previewNotice;
+
+  AppView get ownView => user?.isAdmin == true
+      ? AppView.admin
+      : user?.isStaff == true
+          ? AppView.volunteer
+          : AppView.participant;
+
+  /// What's on screen right now: the admin's chosen preview, or their own view.
+  AppView get currentView => (user?.isAdmin == true ? previewView : null) ?? ownView;
+
+  bool get isPreviewing => currentView != ownView;
+
+  /// Admins only. Choosing Admin goes back to their own view.
+  void viewAs(AppView view) {
+    if (user?.isAdmin != true) return;
+    previewView = view == AppView.admin ? null : view;
+    previewNotice = null;
+    notifyListeners();
+  }
+
+  void clearPreviewNotice() => previewNotice = null;
+
+  /// While previewing, actions that would change real data are switched off.
+  bool _blockedByPreview() {
+    if (!isPreviewing) return false;
+    previewNotice = "You're previewing the app, so this is switched off. Switch back to Admin to use it.";
+    notifyListeners();
+    return true;
+  }
+
   /// True right after creating an account, until the person dismisses the
   /// welcome card on Home.
   bool showWelcome = false;
@@ -185,6 +222,7 @@ class AppState extends ChangeNotifier {
       user = updated;
       await SecureStorageService.saveUser(updated);
       if (!updated.isAdmin) {
+        previewView = null;
         analytics = null;
         sourceReport = null;
       }
@@ -292,6 +330,7 @@ class AppState extends ChangeNotifier {
   Future<void> hideDocument(DocumentType type) async {
     final id = user?.id;
     if (id == null || type == DocumentType.other || documents.any((d) => d.type == type)) return;
+    if (_blockedByPreview()) return;
     hiddenDocuments = {...hiddenDocuments, type};
     notifyListeners();
     await SecureStorageService.saveHiddenDocuments(id, hiddenDocuments);
@@ -310,6 +349,7 @@ class AppState extends ChangeNotifier {
   Future<void> revokeConsent() => _updateConsent(granted: false);
 
   Future<void> _updateConsent({required bool granted}) async {
+    if (granted && _blockedByPreview()) return;
     isLoading = true;
     errorMessage = null;
     notifyListeners();
@@ -436,6 +476,7 @@ class AppState extends ChangeNotifier {
   Future<void> revokeDocumentConsent() => _updateDocumentConsent(granted: false);
 
   Future<void> _updateDocumentConsent({required bool granted}) async {
+    if (granted && _blockedByPreview()) return;
     isLoading = true;
     errorMessage = null;
     notifyListeners();
@@ -460,6 +501,7 @@ class AppState extends ChangeNotifier {
     required List<int> imageBytes,
     String mimeType = 'image/jpeg',
   }) async {
+    if (_blockedByPreview()) return null;
     isUploadingDocument = true;
     errorMessage = null;
     notifyListeners();
@@ -506,6 +548,8 @@ class AppState extends ChangeNotifier {
     final id = user?.id;
     if (id != null) await SecureStorageService.deleteHiddenDocuments(id);
     hiddenDocuments = {};
+    previewView = null;
+    previewNotice = null;
     await locationTracker.updateConsent(granted: false);
     await SecureStorageService.clearSession();
     user = null;

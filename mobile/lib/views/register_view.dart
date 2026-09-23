@@ -234,7 +234,7 @@ class _RegisterViewState extends State<RegisterView> {
                       Wrap(
                         spacing: 8,
                         children: [
-                          for (final t in [PersonType.volunteer, PersonType.employee, PersonType.admin])
+                          for (final t in [PersonType.volunteer, PersonType.admin])
                             ChoiceChip(
                               key: Key('staff-type-${t.name}'),
                               label: Text(t.label),

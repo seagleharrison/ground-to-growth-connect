@@ -286,7 +286,7 @@ void main() {
       expect(find.byKey(const Key('open-benefits')), findsOneWidget);
     });
 
-    for (final role in ['volunteer', 'employee', 'admin']) {
+    for (final role in ['volunteer', 'admin']) {
       withApi('$role accounts do not get the participant Resources tab', (tester, api) async {
         await pumpApp(tester, api, role, start: AppTab.map);
         expect(find.text('Resources'), findsNothing);

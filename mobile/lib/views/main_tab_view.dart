@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../models/models.dart';
 import '../nav.dart';
+import '../theme/app_theme.dart';
 import '../widgets/nav_bar.dart';
 import 'analytics_view.dart';
 import 'documents_view.dart';
@@ -19,9 +21,25 @@ class MainTabView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isStaff = context.select<AppState, bool>((a) => a.user?.isStaff == true);
-    final isAdmin = context.select<AppState, bool>((a) => a.user?.isAdmin == true);
+    // What to show follows the current view: an admin's own, or the preview they picked.
+    final view = context.select<AppState, AppView>((a) => a.currentView);
+    final previewing = context.select<AppState, bool>((a) => a.isPreviewing);
+    final notice = context.select<AppState, String?>((a) => a.previewNotice);
+    final isStaff = view != AppView.participant;
+    final isAdmin = view == AppView.admin;
     final nav = context.watch<TabNav>();
+
+    if (notice != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        final app = context.read<AppState>();
+        if (app.previewNotice == null) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(app.previewNotice!)));
+        app.clearPreviewNotice();
+      });
+    }
 
     final tabs = <({AppTab tab, NavItem item, Widget view})>[
       if (!isStaff)
@@ -66,20 +84,73 @@ class MainTabView extends StatelessWidget {
 
     return Scaffold(
       extendBody: true,
-      body: Stack(
+      body: Column(
         children: [
-          IndexedStack(index: index, children: [for (final t in tabs) t.view]),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: BottomNavBar(
-              items: [for (final t in tabs) t.item],
-              selectedIndex: index,
-              onSelected: (i) => nav.go(tabs[i].tab),
+          if (previewing) _PreviewBanner(view: view, onExit: () => context.read<AppState>().viewAs(AppView.admin)),
+          Expanded(
+            // The banner already covers the status bar, so the screens below don't leave room for it again.
+            child: MediaQuery.removePadding(
+              context: context,
+              removeTop: previewing,
+              child: Stack(
+                children: [
+                  IndexedStack(index: index, children: [for (final t in tabs) t.view]),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: BottomNavBar(
+                      items: [for (final t in tabs) t.item],
+                      selectedIndex: index,
+                      onSelected: (i) => nav.go(tabs[i].tab),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Always visible while an admin is previewing, so it's never unclear that this
+/// isn't their own view, and there's a one-tap way back.
+class _PreviewBanner extends StatelessWidget {
+  final AppView view;
+  final VoidCallback onExit;
+  const _PreviewBanner({required this.view, required this.onExit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('preview-banner'),
+      width: double.infinity,
+      color: Brand.amber,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+          child: Row(
+            children: [
+              const Icon(Icons.visibility_rounded, size: 18, color: Color(0xFF3A2A00)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Previewing as ${view.label}',
+                  style: const TextStyle(color: Color(0xFF3A2A00), fontWeight: FontWeight.w800, fontSize: 14),
+                ),
+              ),
+              TextButton(
+                key: const Key('exit-preview'),
+                onPressed: onExit,
+                style: TextButton.styleFrom(foregroundColor: const Color(0xFF3A2A00)),
+                child: const Text('Exit preview', style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

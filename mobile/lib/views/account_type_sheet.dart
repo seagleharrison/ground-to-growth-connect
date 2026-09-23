@@ -33,8 +33,7 @@ class _AccountTypeSheetState extends State<AccountTypeSheet> {
   static const _options = <(PersonType, IconData, String, String)>[
     (PersonType.homeless, Icons.favorite_rounded, 'Getting support', 'Share your location with outreach and keep your documents safe.'),
     (PersonType.volunteer, Icons.volunteer_activism_rounded, 'Volunteer', 'See the map of people who are sharing their location.'),
-    (PersonType.employee, Icons.badge_rounded, 'Employee', 'See the map of people who are sharing their location.'),
-    (PersonType.admin, Icons.admin_panel_settings_rounded, 'Admin', 'See the map of people who are sharing their location.'),
+    (PersonType.admin, Icons.admin_panel_settings_rounded, 'Admin', 'Everything a volunteer sees, plus organization-wide numbers.'),
   ];
 
   @override

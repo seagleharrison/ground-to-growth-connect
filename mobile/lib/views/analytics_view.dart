@@ -45,26 +45,48 @@ class _AnalyticsViewState extends State<AnalyticsView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(app.analyticsError!, key: const Key('analytics-error'), style: const TextStyle(color: Brand.amber, height: 1.4)),
+                Text(
+                  app.analyticsError!,
+                  key: const Key('analytics-error'),
+                  style: const TextStyle(color: Brand.amber, height: 1.4),
+                ),
                 const SizedBox(height: 12),
-                OutlinedButton(onPressed: app.refreshAnalytics, child: const Text('Try again')),
+                OutlinedButton(
+                  onPressed: app.refreshAnalytics,
+                  child: const Text('Try again'),
+                ),
               ],
             ),
           ),
         if (a != null) ...[
           FadeSlideIn(child: _Overview(a: a)),
           const SizedBox(height: 16),
-          FadeSlideIn(delay: const Duration(milliseconds: 80), child: _SharingCard(a: a)),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 80),
+            child: _SharingCard(a: a),
+          ),
           const SizedBox(height: 16),
-          FadeSlideIn(delay: const Duration(milliseconds: 160), child: _DocumentsCard(a: a)),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 160),
+            child: _DocumentsCard(a: a),
+          ),
           const SizedBox(height: 16),
-          FadeSlideIn(delay: const Duration(milliseconds: 240), child: _DailyCard(a: a)),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 240),
+            child: _DailyCard(a: a),
+          ),
           if (app.sourceReport != null) ...[
             const SizedBox(height: 16),
-            FadeSlideIn(delay: const Duration(milliseconds: 280), child: _SourcesCard(report: app.sourceReport!)),
+            FadeSlideIn(
+              delay: const Duration(milliseconds: 280),
+              child: _SourcesCard(report: app.sourceReport!),
+            ),
           ],
           const SizedBox(height: 16),
-          const FadeSlideIn(delay: Duration(milliseconds: 320), child: _PrivacyNote()),
+          const FadeSlideIn(
+            delay: Duration(milliseconds: 320),
+            child: _PrivacyNote(),
+          ),
         ],
       ],
     );
@@ -79,9 +101,23 @@ class _Overview extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _BigNumber(key: const Key('stat-participants'), value: a.participants, label: 'People we serve', color: Brand.orange)),
+        Expanded(
+          child: _BigNumber(
+            key: const Key('stat-participants'),
+            value: a.participants,
+            label: 'People we serve',
+            color: Brand.orange,
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _BigNumber(key: const Key('stat-staff'), value: a.staff, label: 'Staff & volunteers', color: Brand.blue)),
+        Expanded(
+          child: _BigNumber(
+            key: const Key('stat-staff'),
+            value: a.staff,
+            label: 'Staff & volunteers',
+            color: Brand.blue,
+          ),
+        ),
       ],
     );
   }
@@ -91,7 +127,12 @@ class _BigNumber extends StatelessWidget {
   final int value;
   final String label;
   final Color color;
-  const _BigNumber({super.key, required this.value, required this.label, required this.color});
+  const _BigNumber({
+    super.key,
+    required this.value,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -105,11 +146,22 @@ class _BigNumber extends StatelessWidget {
             curve: Curves.easeOutCubic,
             builder: (context, v, _) => Text(
               '${v.round()}',
-              style: TextStyle(fontSize: 40, fontWeight: FontWeight.w800, color: color, height: 1),
+              style: TextStyle(
+                fontSize: 40,
+                fontWeight: FontWeight.w800,
+                color: color,
+                height: 1,
+              ),
             ),
           ),
           const SizedBox(height: 8),
-          Text(label, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -122,7 +174,12 @@ class _ProgressRow extends StatelessWidget {
   final int value;
   final int total;
   final Color color;
-  const _ProgressRow({required this.label, required this.value, required this.total, required this.color});
+  const _ProgressRow({
+    required this.label,
+    required this.value,
+    required this.total,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -134,8 +191,16 @@ class _ProgressRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 15))),
-              Text(total == 0 ? '$value' : '$value of $total', style: const TextStyle(fontWeight: FontWeight.w800)),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(color: Colors.white70, fontSize: 15),
+                ),
+              ),
+              Text(
+                total == 0 ? '$value' : '$value of $total',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -169,11 +234,29 @@ class _SharingCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Location sharing', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const Text(
+            'Location sharing',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 6),
-          _ProgressRow(label: 'Sharing their location', value: a.participantsSharing, total: a.participants, color: Brand.green),
-          _ProgressRow(label: 'Checked in today', value: a.activeLast24Hours, total: a.participants, color: Brand.orange),
-          _ProgressRow(label: 'Checked in this week', value: a.activeLast7Days, total: a.participants, color: Brand.blue),
+          _ProgressRow(
+            label: 'Sharing their location',
+            value: a.participantsSharing,
+            total: a.participants,
+            color: Brand.green,
+          ),
+          _ProgressRow(
+            label: 'Checked in today',
+            value: a.activeLast24Hours,
+            total: a.participants,
+            color: Brand.orange,
+          ),
+          _ProgressRow(
+            label: 'Checked in this week',
+            value: a.activeLast7Days,
+            total: a.participants,
+            color: Brand.blue,
+          ),
         ],
       ),
     );
@@ -190,12 +273,28 @@ class _DocumentsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Documents', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const Text(
+            'Documents',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 6),
-          _ProgressRow(label: 'Using document storage', value: a.participantsUsingStorage, total: a.participants, color: Brand.blue),
-          _ProgressRow(label: 'ID, Social Security card and birth certificate all on file', value: a.participantsWithAllThree, total: a.participants, color: Brand.green),
+          _ProgressRow(
+            label: 'Using document storage',
+            value: a.participantsUsingStorage,
+            total: a.participants,
+            color: Brand.blue,
+          ),
+          _ProgressRow(
+            label: 'ID, Social Security card and birth certificate all on file',
+            value: a.participantsWithAllThree,
+            total: a.participants,
+            color: Brand.green,
+          ),
           const SizedBox(height: 4),
-          Text('${a.documentsStored} documents stored in all', style: const TextStyle(color: Colors.white54, fontSize: 13)),
+          Text(
+            '${a.documentsStored} documents stored in all',
+            style: const TextStyle(color: Colors.white54, fontSize: 13),
+          ),
         ],
       ),
     );
@@ -208,7 +307,10 @@ class _DailyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxCheckIns = a.daily.fold<int>(1, (m, d) => d.checkIns > m ? d.checkIns : m);
+    final maxCheckIns = a.daily.fold<int>(
+      1,
+      (m, d) => d.checkIns > m ? d.checkIns : m,
+    );
     final newPeople = a.daily.fold<int>(0, (s, d) => s + d.signups);
     final checkIns = a.daily.fold<int>(0, (s, d) => s + d.checkIns);
 
@@ -216,10 +318,16 @@ class _DailyCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Last ${a.daily.length} days', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(
+            'Last ${a.daily.length} days',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 4),
-          Text('$checkIns check-ins · $newPeople new ${newPeople == 1 ? 'account' : 'accounts'}',
-              key: const Key('daily-summary'), style: const TextStyle(color: Colors.white60)),
+          Text(
+            '$checkIns check-ins · $newPeople new ${newPeople == 1 ? 'account' : 'accounts'}',
+            key: const Key('daily-summary'),
+            style: const TextStyle(color: Colors.white60),
+          ),
           const SizedBox(height: 18),
           SizedBox(
             height: 110,
@@ -237,7 +345,9 @@ class _DailyCard extends StatelessWidget {
                         builder: (context, v, _) => Container(
                           height: 4 + 106 * v,
                           decoration: BoxDecoration(
-                            color: i == a.daily.length - 1 ? Brand.orange : Brand.orange.withValues(alpha: 0.45),
+                            color: i == a.daily.length - 1
+                                ? Brand.orange
+                                : Brand.orange.withValues(alpha: 0.45),
                             borderRadius: BorderRadius.circular(5),
                           ),
                         ),
@@ -251,8 +361,14 @@ class _DailyCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(_shortDate(a.daily.first.date), style: const TextStyle(color: Colors.white38, fontSize: 12)),
-              const Text('Today', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              Text(
+                _shortDate(a.daily.first.date),
+                style: const TextStyle(color: Colors.white38, fontSize: 12),
+              ),
+              const Text(
+                'Today',
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+              ),
             ],
           ),
         ],
@@ -261,7 +377,20 @@ class _DailyCard extends StatelessWidget {
   }
 
   static String _shortDate(String iso) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     final parts = iso.split('-');
     return '${months[int.parse(parts[1]) - 1]} ${int.parse(parts[2])}';
   }
@@ -282,24 +411,43 @@ class _SourcesCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Resources info', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const Text(
+            'Resources info',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 4),
           Text(
             items.isEmpty
                 ? 'All ${report.total} official pages we point people to look unchanged.'
                 : '${items.length} of ${report.total} official pages need a look.',
             key: const Key('sources-summary'),
-            style: TextStyle(color: items.isEmpty ? Brand.green : Brand.amber, height: 1.35),
+            style: TextStyle(
+              color: items.isEmpty ? Brand.green : Brand.amber,
+              height: 1.35,
+            ),
           ),
           for (final a in items) ...[
             const SizedBox(height: 14),
             const Divider(height: 1, color: Colors.white12),
             const SizedBox(height: 14),
-            Text(Uri.tryParse(a.url)?.host ?? a.url, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              Uri.tryParse(a.url)?.host ?? a.url,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 4),
-            Text(a.reason, style: const TextStyle(color: Colors.white60, fontSize: 13.5, height: 1.4)),
+            Text(
+              a.reason,
+              style: const TextStyle(
+                color: Colors.white60,
+                fontSize: 13.5,
+                height: 1.4,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(a.url, style: const TextStyle(color: Colors.white38, fontSize: 11.5)),
+            Text(
+              a.url,
+              style: const TextStyle(color: Colors.white38, fontSize: 11.5),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -311,11 +459,52 @@ class _SourcesCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 TextButton(
                   key: Key('reviewed-${a.url}'),
-                  onPressed: () => context.read<AppState>().markSourceReviewed(a.url),
-                  child: const Text('Still right', style: TextStyle(fontWeight: FontWeight.w800)),
+                  onPressed: () =>
+                      context.read<AppState>().markSourceReviewed(a.url),
+                  child: const Text(
+                    'Still right',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ),
               ],
             ),
+          ],
+          if (report.cannotCheck.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1, color: Colors.white12),
+            const SizedBox(height: 12),
+            Text(
+              '${report.cannotCheck.length} ${report.cannotCheck.length == 1 ? 'website turns' : 'websites turn'} away automatic checks, like Social Security. That doesn\'t mean anything is wrong. Open them now and then to make sure they still look right.',
+              key: const Key('cannot-check-summary'),
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            for (final a in report.cannotCheck)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        a.url.replaceFirst('https://', ''),
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 12,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    TextButton(
+                      key: Key('open-blocked-${a.url}'),
+                      onPressed: () => Launch.link(context, a.url),
+                      child: const Text('Open'),
+                    ),
+                  ],
+                ),
+              ),
           ],
           const SizedBox(height: 10),
           const Text(
@@ -341,7 +530,11 @@ class _PrivacyNote extends StatelessWidget {
         Expanded(
           child: Text(
             'Only admins can see this page. It shows totals only — never names, locations or documents.',
-            style: TextStyle(color: Colors.white54, fontSize: 12.5, height: 1.4),
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 12.5,
+              height: 1.4,
+            ),
           ),
         ),
       ],

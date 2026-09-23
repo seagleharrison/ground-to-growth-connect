@@ -30,6 +30,9 @@ class FakeApi {
   final List<Map<String, dynamic>> documents = [];
   int analyticsRequests = 0;
 
+  /// Every non-tile request the app made, as "METHOD /path", in order.
+  final List<String> routes = [];
+
   /// What GET /api/resources returns; null answers 404 (as if the server had no content).
   String? resourcesBody;
   String resourcesEtag = '"v1"';
@@ -39,6 +42,7 @@ class FakeApi {
 
   /// What GET /api/analytics/sources returns for an admin.
   List<Map<String, dynamic>> flaggedSources = [];
+  List<Map<String, dynamic>> blockedSources = [];
   int totalSources = 12;
 
   /// When true, GET /api/analytics fails as if the server were unreachable.
@@ -72,6 +76,7 @@ class FakeApi {
       return http.Response.fromStream(await _realNetwork.send(forwarded));
     }
     final route = '${request.method} ${request.url.path}';
+    routes.add(route);
 
     // GET /api/documents/{id}: hand back the stored file (a real 1x1 PNG).
     final docMatch = RegExp(r'^/api/documents/(d\d+)$').firstMatch(request.url.path);
@@ -124,7 +129,7 @@ class FakeApi {
         if (user['personType'] != 'admin') return _json({'error': 'Admin access required'}, status: 403);
         return _json({
           'generatedAt': '2026-09-21T12:00:00.000Z',
-          'people': {'participants': 40, 'volunteers': 5, 'employees': 3, 'admins': 2},
+          'people': {'participants': 40, 'volunteers': 5, 'admins': 2},
           'sharing': {'participantsSharing': 30, 'activeLast24Hours': 18, 'activeLast7Days': 27},
           'documents': {'participantsUsingStorage': 22, 'participantsWithAllThree': 9, 'documentsStored': 61},
           'daily': [
@@ -141,11 +146,11 @@ class FakeApi {
         return http.Response(resourcesBody!, 200, headers: {'content-type': 'application/json', 'etag': resourcesEtag});
       case 'GET /api/analytics/sources':
         if (user['personType'] != 'admin') return _json({'error': 'Admin access required'}, status: 403);
-        return _json({'total': totalSources, 'lastCheckedAt': '2026-09-21T00:00:00.000Z', 'needsAttention': flaggedSources});
+        return _json({'total': totalSources, 'lastCheckedAt': '2026-09-21T00:00:00.000Z', 'needsAttention': flaggedSources, 'cannotCheck': blockedSources});
       case 'POST /api/analytics/sources/reviewed':
         final url = (jsonDecode(request.body) as Map<String, dynamic>)['url'];
         flaggedSources.removeWhere((s) => s['url'] == url);
-        return _json({'total': totalSources, 'lastCheckedAt': '2026-09-21T00:00:00.000Z', 'needsAttention': flaggedSources});
+        return _json({'total': totalSources, 'lastCheckedAt': '2026-09-21T00:00:00.000Z', 'needsAttention': flaggedSources, 'cannotCheck': blockedSources});
       case 'GET /api/consent/status':
         return _json({'granted': false});
       case 'GET /api/consent/history':

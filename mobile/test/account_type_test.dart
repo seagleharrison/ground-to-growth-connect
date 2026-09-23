@@ -49,7 +49,7 @@ void main() {
     await _openSheet(tester);
 
     expect(find.text('Account type'), findsWidgets);
-    for (final t in ['Getting support', 'Volunteer', 'Employee', 'Admin']) {
+    for (final t in ['Getting support', 'Volunteer', 'Admin']) {
       expect(find.text(t), findsOneWidget);
     }
     expect(find.text('Current'), findsOneWidget);

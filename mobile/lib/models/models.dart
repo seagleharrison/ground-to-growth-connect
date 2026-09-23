@@ -5,22 +5,32 @@
 enum PersonType {
   homeless,
   volunteer,
-  employee,
   admin;
 
   static PersonType fromWire(String raw) => PersonType.values.firstWhere(
-        (t) => t.name == raw,
-        orElse: () => PersonType.homeless,
-      );
+    (t) => t.name == raw,
+    orElse: () => PersonType.homeless,
+  );
 
   String get label => switch (this) {
-        PersonType.homeless => 'Person we serve',
-        PersonType.volunteer => 'Volunteer',
-        PersonType.employee => 'Employee',
-        PersonType.admin => 'Admin',
-      };
+    PersonType.homeless => 'Person we serve',
+    PersonType.volunteer => 'Volunteer',
+    PersonType.admin => 'Admin',
+  };
 
   bool get isStaff => this != PersonType.homeless;
+}
+
+/// Which version of the app someone is looking at. An admin can look at the
+/// app the way volunteers and participants see it (a preview) without changing
+/// their account or what the server lets them do.
+enum AppView {
+  admin('Admin'),
+  volunteer('Volunteer'),
+  participant('Getting support');
+
+  final String label;
+  const AppView(this.label);
 }
 
 enum Gender {
@@ -31,25 +41,25 @@ enum Gender {
   preferNotToSay;
 
   static Gender fromWire(String raw) => switch (raw) {
-        'female' => Gender.female,
-        'male' => Gender.male,
-        'nonbinary' => Gender.nonbinary,
-        'other' => Gender.other,
-        _ => Gender.preferNotToSay,
-      };
+    'female' => Gender.female,
+    'male' => Gender.male,
+    'nonbinary' => Gender.nonbinary,
+    'other' => Gender.other,
+    _ => Gender.preferNotToSay,
+  };
 
   String get wireValue => switch (this) {
-        Gender.preferNotToSay => 'prefer_not_to_say',
-        _ => name,
-      };
+    Gender.preferNotToSay => 'prefer_not_to_say',
+    _ => name,
+  };
 
   String get label => switch (this) {
-        Gender.female => 'Female',
-        Gender.male => 'Male',
-        Gender.nonbinary => 'Non-binary',
-        Gender.other => 'Other',
-        Gender.preferNotToSay => 'Prefer not to say',
-      };
+    Gender.female => 'Female',
+    Gender.male => 'Male',
+    Gender.nonbinary => 'Non-binary',
+    Gender.other => 'Other',
+    Gender.preferNotToSay => 'Prefer not to say',
+  };
 }
 
 class User {
@@ -77,26 +87,26 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) => User(
-        id: json['id'] as String,
-        personType: json['personType'] as String,
-        name: json['name'] as String,
-        email: json['email'] as String?,
-        gender: json['gender'] as String?,
-        phone: json['phone'] as String?,
-        isStaff: json['isStaff'] as bool,
-        hasProfilePicture: json['hasProfilePicture'] as bool? ?? false,
-      );
+    id: json['id'] as String,
+    personType: json['personType'] as String,
+    name: json['name'] as String,
+    email: json['email'] as String?,
+    gender: json['gender'] as String?,
+    phone: json['phone'] as String?,
+    isStaff: json['isStaff'] as bool,
+    hasProfilePicture: json['hasProfilePicture'] as bool? ?? false,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'personType': personType,
-        'name': name,
-        'email': email,
-        'gender': gender,
-        'phone': phone,
-        'isStaff': isStaff,
-        'hasProfilePicture': hasProfilePicture,
-      };
+    'id': id,
+    'personType': personType,
+    'name': name,
+    'email': email,
+    'gender': gender,
+    'phone': phone,
+    'isStaff': isStaff,
+    'hasProfilePicture': hasProfilePicture,
+  };
 }
 
 class RegisterRequest {
@@ -117,13 +127,13 @@ class RegisterRequest {
   });
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'email': email,
-        'gender': gender,
-        'phone': phone,
-        'personType': personType,
-        'staffCode': staffCode,
-      };
+    'name': name,
+    'email': email,
+    'gender': gender,
+    'phone': phone,
+    'personType': personType,
+    'staffCode': staffCode,
+  };
 }
 
 class RegisterResponse {
@@ -133,7 +143,8 @@ class RegisterResponse {
 
   RegisterResponse({required this.user, required this.token, this.message});
 
-  factory RegisterResponse.fromJson(Map<String, dynamic> json) => RegisterResponse(
+  factory RegisterResponse.fromJson(Map<String, dynamic> json) =>
+      RegisterResponse(
         user: User.fromJson(json['user'] as Map<String, dynamic>),
         token: json['token'] as String,
         message: json['message'] as String?,
@@ -146,7 +157,8 @@ class DisclosureResponse {
 
   DisclosureResponse({required this.version, required this.text});
 
-  factory DisclosureResponse.fromJson(Map<String, dynamic> json) => DisclosureResponse(
+  factory DisclosureResponse.fromJson(Map<String, dynamic> json) =>
+      DisclosureResponse(
         version: json['version'] as String,
         text: json['text'] as String,
       );
@@ -168,12 +180,12 @@ class ConsentStatus {
   });
 
   factory ConsentStatus.fromJson(Map<String, dynamic> json) => ConsentStatus(
-        granted: json['granted'] as bool,
-        consentVersion: json['consent_version'] as String?,
-        grantedAt: json['granted_at'] as String?,
-        revokedAt: json['revoked_at'] as String?,
-        lastRecordedAt: json['last_recorded_at'] as String?,
-      );
+    granted: json['granted'] as bool,
+    consentVersion: json['consent_version'] as String?,
+    grantedAt: json['granted_at'] as String?,
+    revokedAt: json['revoked_at'] as String?,
+    lastRecordedAt: json['last_recorded_at'] as String?,
+  );
 }
 
 class ConsentRecord {
@@ -194,13 +206,13 @@ class ConsentRecord {
   });
 
   factory ConsentRecord.fromJson(Map<String, dynamic> json) => ConsentRecord(
-        id: json['id'] as String,
-        consentVersion: json['consent_version'] as String?,
-        granted: json['granted'] as bool,
-        grantedAt: json['granted_at'] as String?,
-        revokedAt: json['revoked_at'] as String?,
-        createdAt: json['created_at'] as String,
-      );
+    id: json['id'] as String,
+    consentVersion: json['consent_version'] as String?,
+    granted: json['granted'] as bool,
+    grantedAt: json['granted_at'] as String?,
+    revokedAt: json['revoked_at'] as String?,
+    createdAt: json['created_at'] as String,
+  );
 }
 
 class LocationReportPayload {
@@ -217,11 +229,11 @@ class LocationReportPayload {
   });
 
   Map<String, dynamic> toJson() => {
-        'latitude': latitude,
-        'longitude': longitude,
-        'accuracyMeters': accuracyMeters,
-        'reportedAt': reportedAt,
-      };
+    'latitude': latitude,
+    'longitude': longitude,
+    'accuracyMeters': accuracyMeters,
+    'reportedAt': reportedAt,
+  };
 }
 
 class LocationReportMeta {
@@ -231,7 +243,8 @@ class LocationReportMeta {
 
   LocationReportMeta({this.id, required this.reportedAt, this.createdAt});
 
-  factory LocationReportMeta.fromJson(Map<String, dynamic> json) => LocationReportMeta(
+  factory LocationReportMeta.fromJson(Map<String, dynamic> json) =>
+      LocationReportMeta(
         id: json['id'] as String?,
         reportedAt: json['reported_at'] as String,
         createdAt: json['created_at'] as String?,
@@ -259,14 +272,14 @@ class UserLocation {
   });
 
   factory UserLocation.fromJson(Map<String, dynamic> json) => UserLocation(
-        userId: json['userId'] as String,
-        name: json['name'] as String,
-        personType: json['personType'] as String?,
-        latitude: (json['latitude'] as num).toDouble(),
-        longitude: (json['longitude'] as num).toDouble(),
-        accuracyMeters: (json['accuracyMeters'] as num?)?.toDouble(),
-        reportedAt: json['reportedAt'] as String,
-      );
+    userId: json['userId'] as String,
+    name: json['name'] as String,
+    personType: json['personType'] as String?,
+    latitude: (json['latitude'] as num).toDouble(),
+    longitude: (json['longitude'] as num).toDouble(),
+    accuracyMeters: (json['accuracyMeters'] as num?)?.toDouble(),
+    reportedAt: json['reportedAt'] as String,
+  );
 }
 
 /// A participant's own reported location — no userId/name, since this always
@@ -285,7 +298,8 @@ class MyLocationReport {
     required this.reportedAt,
   });
 
-  factory MyLocationReport.fromJson(Map<String, dynamic> json) => MyLocationReport(
+  factory MyLocationReport.fromJson(Map<String, dynamic> json) =>
+      MyLocationReport(
         latitude: (json['latitude'] as num).toDouble(),
         longitude: (json['longitude'] as num).toDouble(),
         accuracyMeters: (json['accuracyMeters'] as num?)?.toDouble(),
@@ -302,25 +316,25 @@ enum DocumentType {
   other;
 
   static DocumentType fromWire(String raw) => switch (raw) {
-        'government_id' => DocumentType.governmentId,
-        'social_security_card' => DocumentType.socialSecurityCard,
-        'birth_certificate' => DocumentType.birthCertificate,
-        _ => DocumentType.other,
-      };
+    'government_id' => DocumentType.governmentId,
+    'social_security_card' => DocumentType.socialSecurityCard,
+    'birth_certificate' => DocumentType.birthCertificate,
+    _ => DocumentType.other,
+  };
 
   String get wireValue => switch (this) {
-        DocumentType.governmentId => 'government_id',
-        DocumentType.socialSecurityCard => 'social_security_card',
-        DocumentType.birthCertificate => 'birth_certificate',
-        DocumentType.other => 'other',
-      };
+    DocumentType.governmentId => 'government_id',
+    DocumentType.socialSecurityCard => 'social_security_card',
+    DocumentType.birthCertificate => 'birth_certificate',
+    DocumentType.other => 'other',
+  };
 
   String get label => switch (this) {
-        DocumentType.governmentId => 'Government photo ID',
-        DocumentType.socialSecurityCard => 'Social Security card',
-        DocumentType.birthCertificate => 'Birth certificate',
-        DocumentType.other => 'Other',
-      };
+    DocumentType.governmentId => 'Government photo ID',
+    DocumentType.socialSecurityCard => 'Social Security card',
+    DocumentType.birthCertificate => 'Birth certificate',
+    DocumentType.other => 'Other',
+  };
 
   /// The core three types shown in the "what's on file" checklist. `.other`
   /// is excluded — it's a catch-all label, not a single checkable item.
@@ -351,13 +365,13 @@ class DocumentMeta {
   DocumentType get type => DocumentType.fromWire(documentType);
 
   factory DocumentMeta.fromJson(Map<String, dynamic> json) => DocumentMeta(
-        id: json['id'] as String,
-        documentType: json['documentType'] as String,
-        label: json['label'] as String?,
-        mimeType: json['mimeType'] as String,
-        fileSizeBytes: json['fileSizeBytes'] as int,
-        createdAt: json['createdAt'] as String,
-      );
+    id: json['id'] as String,
+    documentType: json['documentType'] as String,
+    label: json['label'] as String?,
+    mimeType: json['mimeType'] as String,
+    fileSizeBytes: json['fileSizeBytes'] as int,
+    createdAt: json['createdAt'] as String,
+  );
 }
 
 /// Staff-only: which document *types* a participant has on file. Staff never
@@ -368,9 +382,13 @@ class DocumentsOnFile {
 
   DocumentsOnFile({required this.userId, required this.types});
 
-  factory DocumentsOnFile.fromJson(Map<String, dynamic> json) => DocumentsOnFile(
+  factory DocumentsOnFile.fromJson(Map<String, dynamic> json) =>
+      DocumentsOnFile(
         userId: json['userId'] as String,
-        types: {for (final t in (json['documentTypes'] as List)) DocumentType.fromWire(t as String)},
+        types: {
+          for (final t in (json['documentTypes'] as List))
+            DocumentType.fromWire(t as String),
+        },
       );
 }
 
@@ -380,8 +398,11 @@ class GetDocumentResponse {
 
   GetDocumentResponse({required this.document, required this.fileBase64});
 
-  factory GetDocumentResponse.fromJson(Map<String, dynamic> json) => GetDocumentResponse(
-        document: DocumentMeta.fromJson(json['document'] as Map<String, dynamic>),
+  factory GetDocumentResponse.fromJson(Map<String, dynamic> json) =>
+      GetDocumentResponse(
+        document: DocumentMeta.fromJson(
+          json['document'] as Map<String, dynamic>,
+        ),
         fileBase64: json['fileBase64'] as String,
       );
 }
@@ -399,7 +420,6 @@ class GgcException implements Exception {
 class Analytics {
   final int participants;
   final int volunteers;
-  final int employees;
   final int admins;
   final int participantsSharing;
   final int activeLast24Hours;
@@ -412,7 +432,6 @@ class Analytics {
   Analytics({
     required this.participants,
     required this.volunteers,
-    required this.employees,
     required this.admins,
     required this.participantsSharing,
     required this.activeLast24Hours,
@@ -430,7 +449,6 @@ class Analytics {
     return Analytics(
       participants: people['participants'] as int,
       volunteers: people['volunteers'] as int,
-      employees: people['employees'] as int,
       admins: people['admins'] as int,
       participantsSharing: sharing['participantsSharing'] as int,
       activeLast24Hours: sharing['activeLast24Hours'] as int,
@@ -438,11 +456,14 @@ class Analytics {
       participantsUsingStorage: docs['participantsUsingStorage'] as int,
       participantsWithAllThree: docs['participantsWithAllThree'] as int,
       documentsStored: docs['documentsStored'] as int,
-      daily: [for (final d in (json['daily'] as List)) AnalyticsDay.fromJson(d as Map<String, dynamic>)],
+      daily: [
+        for (final d in (json['daily'] as List))
+          AnalyticsDay.fromJson(d as Map<String, dynamic>),
+      ],
     );
   }
 
-  int get staff => volunteers + employees + admins;
+  int get staff => volunteers + admins;
 }
 
 class AnalyticsDay {
@@ -450,13 +471,17 @@ class AnalyticsDay {
   final int signups;
   final int checkIns;
 
-  AnalyticsDay({required this.date, required this.signups, required this.checkIns});
+  AnalyticsDay({
+    required this.date,
+    required this.signups,
+    required this.checkIns,
+  });
 
   factory AnalyticsDay.fromJson(Map<String, dynamic> json) => AnalyticsDay(
-        date: json['date'] as String,
-        signups: json['signups'] as int,
-        checkIns: json['checkIns'] as int,
-      );
+    date: json['date'] as String,
+    signups: json['signups'] as int,
+    checkIns: json['checkIns'] as int,
+  );
 }
 
 /// Admin only: official pages the Resources content points to that need a look.
@@ -465,15 +490,31 @@ class SourceReport {
   final String? lastCheckedAt;
   final List<SourceAttention> needsAttention;
 
-  SourceReport({required this.total, this.lastCheckedAt, required this.needsAttention});
+  /// Pages whose websites refuse automatic checks. Not a problem in itself; an
+  /// admin can open them now and then.
+  final List<SourceAttention> cannotCheck;
+
+  SourceReport({
+    required this.total,
+    this.lastCheckedAt,
+    required this.needsAttention,
+    this.cannotCheck = const [],
+  });
 
   factory SourceReport.fromJson(Map<String, dynamic> json) => SourceReport(
-        total: json['total'] as int,
-        lastCheckedAt: (json['lastCheckedAt'] as String?)?.isEmpty == true ? null : json['lastCheckedAt'] as String?,
-        needsAttention: [
-          for (final a in (json['needsAttention'] as List)) SourceAttention.fromJson(a as Map<String, dynamic>),
-        ],
-      );
+    total: json['total'] as int,
+    lastCheckedAt: (json['lastCheckedAt'] as String?)?.isEmpty == true
+        ? null
+        : json['lastCheckedAt'] as String?,
+    needsAttention: [
+      for (final a in (json['needsAttention'] as List))
+        SourceAttention.fromJson(a as Map<String, dynamic>),
+    ],
+    cannotCheck: [
+      for (final a in (json['cannotCheck'] as List? ?? []))
+        SourceAttention.fromJson(a as Map<String, dynamic>),
+    ],
+  );
 }
 
 class SourceAttention {
@@ -481,9 +522,14 @@ class SourceAttention {
   final String reason;
   final int status;
 
-  SourceAttention({required this.url, required this.reason, required this.status});
+  SourceAttention({
+    required this.url,
+    required this.reason,
+    required this.status,
+  });
 
-  factory SourceAttention.fromJson(Map<String, dynamic> json) => SourceAttention(
+  factory SourceAttention.fromJson(Map<String, dynamic> json) =>
+      SourceAttention(
         url: json['url'] as String,
         reason: json['reason'] as String,
         status: json['status'] as int,

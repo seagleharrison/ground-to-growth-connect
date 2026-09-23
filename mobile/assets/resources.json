@@ -55,7 +55,7 @@
           "heading": "How to get it",
           "items": [
             "Fill out the Social Security card form (Form SS-5). It's free.",
-            "Bring it, with one paper that proves who you are, to your local Social Security office. Find yours with the office locator.",
+            "Bring it, with one paper that proves who you are, to a Social Security Card Center. The office locator shows which nearby offices replace cards. Making an appointment first can save you a long wait.",
             "If you have a Georgia driver's license or state ID and a mailing address, you may be able to do it online with a \"my Social Security\" account.",
             "The new card comes in the mail in about 10 business days."
           ],
@@ -78,7 +78,7 @@
       ],
       "links": [
         {
-          "label": "Find a Social Security office",
+          "label": "Find a Card Center or office near you",
           "url": "https://www.ssa.gov/locator"
         },
         {
