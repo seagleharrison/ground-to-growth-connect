@@ -42,12 +42,14 @@ func NewServer(db *sql.DB, docs blobstore.Store) http.Handler {
 	mux.HandleFunc("GET /health", s.handleHealth)
 
 	mux.HandleFunc("POST /api/users", s.handleRegister)
+	mux.HandleFunc("POST /api/recover", s.handleRecover)
 	mux.HandleFunc("GET /api/me", s.withAuth(s.handleMe))
 	mux.HandleFunc("PATCH /api/me", s.withAuth(s.handleUpdateProfile))
 	mux.HandleFunc("PUT /api/me/picture", s.withAuth(s.handlePutProfilePicture))
 	mux.HandleFunc("GET /api/me/picture", s.withAuth(s.handleGetProfilePicture))
 	mux.HandleFunc("DELETE /api/me/picture", s.withAuth(s.handleDeleteProfilePicture))
 	mux.HandleFunc("DELETE /api/account", s.withAuth(s.handleDeleteAccount))
+	mux.HandleFunc("POST /api/me/recovery-code", s.withAuth(s.handleRegenerateRecoveryCode))
 
 	mux.HandleFunc("GET /api/consent/disclosure", s.handleDisclosure)
 	mux.HandleFunc("GET /api/consent/status", s.withAuth(s.handleConsentStatus))

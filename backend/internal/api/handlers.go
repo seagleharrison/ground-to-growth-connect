@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -168,6 +169,11 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	recoveryCode, err := cryptox.GenerateRecoveryCode()
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
 	tokenHash := cryptox.HashToken(token)
 
 	nameTrunc := truncateRunes(name, 200)
@@ -207,10 +213,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var u authUser
 	u.PersonType = personType
 	err = s.db.QueryRow(
-		`INSERT INTO users (person_type, name_encrypted, email_encrypted, gender_encrypted, phone_encrypted, token_hash)
-		 VALUES (?, ?, ?, ?, ?, ?)
+		`INSERT INTO users (person_type, name_encrypted, email_encrypted, gender_encrypted, phone_encrypted, token_hash, recovery_code_hash)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
 		 RETURNING id, name_encrypted, email_encrypted, gender_encrypted, phone_encrypted`,
-		personType, nameEnc, emailEnc, genderEnc, phoneEnc, tokenHash,
+		personType, nameEnc, emailEnc, genderEnc, phoneEnc, tokenHash, cryptox.HashRecoveryCode(recoveryCode),
 	).Scan(&u.ID, &u.NameEncrypted, &u.EmailEncrypted, &u.GenderEncrypted, &u.PhoneEncrypted)
 	if err != nil {
 		writeInternalError(w, err)
@@ -224,9 +230,84 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"user":         profile,
+		"token":        token,
+		"recoveryCode": recoveryCode,
+		"message":      "Store this token securely. It cannot be recovered.",
+	})
+}
+
+type recoverRequest struct {
+	Code string `json:"code"`
+}
+
+// handleRecover lets someone who lost their phone, or changed numbers,
+// get back into their existing account with only the recovery code they
+// were given at sign-up — no email, no password, nothing else on file is
+// required. A new token is issued and the old one stops working, the same
+// way changing a password ends every other session.
+func (s *Server) handleRecover(w http.ResponseWriter, r *http.Request) {
+	var body recoverRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	normalized := cryptox.NormalizeRecoveryCode(body.Code)
+	if normalized == "" {
+		writeError(w, http.StatusBadRequest, "code is required")
+		return
+	}
+
+	token, err := cryptox.GenerateToken()
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	var u authUser
+	err = s.db.QueryRow(
+		`UPDATE users SET token_hash = ? WHERE recovery_code_hash = ?
+		 RETURNING id, person_type, name_encrypted, email_encrypted, gender_encrypted, phone_encrypted, profile_picture_key, profile_picture_mime`,
+		cryptox.HashToken(token), cryptox.HashRecoveryCode(normalized),
+	).Scan(&u.ID, &u.PersonType, &u.NameEncrypted, &u.EmailEncrypted, &u.GenderEncrypted, &u.PhoneEncrypted, &u.ProfilePictureKey, &u.ProfilePictureMime)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "That recovery code doesn't match any account. Double-check it, or ask Ground to Growth for help.")
+		return
+	}
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	profile, err := profileFromUser(&u)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"user":    profile,
 		"token":   token,
-		"message": "Store this token securely. It cannot be recovered.",
+		"message": "You're back in. Any other device using this account was signed out.",
+	})
+}
+
+// handleRegenerateRecoveryCode replaces the account's recovery code with a
+// new one, e.g. if someone lost the paper it was written on. The old code
+// stops working the moment this runs.
+func (s *Server) handleRegenerateRecoveryCode(w http.ResponseWriter, r *http.Request) {
+	u := userFromCtx(r)
+	recoveryCode, err := cryptox.GenerateRecoveryCode()
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if _, err := s.db.Exec(`UPDATE users SET recovery_code_hash = ? WHERE id = ?`, cryptox.HashRecoveryCode(recoveryCode), u.ID); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"recoveryCode": recoveryCode,
+		"message":      "Store this new code securely. The old one no longer works.",
 	})
 }
 

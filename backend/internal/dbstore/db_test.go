@@ -123,7 +123,7 @@ func TestMigrateUpgradesAnExistingDatabase(t *testing.T) {
 	}
 
 	cols := userColumns(t, db)
-	if !cols["profile_picture_key"] || !cols["profile_picture_mime"] {
+	if !cols["profile_picture_key"] || !cols["profile_picture_mime"] || !cols["recovery_code_hash"] {
 		t.Fatalf("expected the new columns after migrating, got %v", cols)
 	}
 	var n int

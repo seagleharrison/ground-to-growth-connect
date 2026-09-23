@@ -180,3 +180,51 @@ func GenerateToken() (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
+
+// recoveryCodeAlphabet excludes characters people commonly misread or
+// mistype for one another: 0/O, 1/I/L.
+const recoveryCodeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+// GenerateRecoveryCode makes a code someone can write down (or a staff
+// member can write down for them) and use later to get back into their
+// account from any device — no password, no email, nothing else needed.
+// Formatted in groups of four (e.g. "G7K4-9XPQ-3RTM") so it's easy to copy by
+// hand; NormalizeRecoveryCode reverses the formatting before hashing.
+func GenerateRecoveryCode() (string, error) {
+	const groups, groupLen = 3, 4
+	b := make([]byte, groups*groupLen)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	var sb []byte
+	for i, v := range b {
+		if i > 0 && i%groupLen == 0 {
+			sb = append(sb, '-')
+		}
+		sb = append(sb, recoveryCodeAlphabet[int(v)%len(recoveryCodeAlphabet)])
+	}
+	return string(sb), nil
+}
+
+// NormalizeRecoveryCode undoes formatting/typos of no real consequence
+// (case, dashes, spaces) before a code is hashed or compared, so "g7k4 9xpq
+// 3rtm" and "G7K4-9XPQ-3RTM" are the same code.
+func NormalizeRecoveryCode(code string) string {
+	upper := make([]byte, 0, len(code))
+	for _, r := range code {
+		switch {
+		case r >= 'a' && r <= 'z':
+			upper = append(upper, byte(r-'a'+'A'))
+		case r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			upper = append(upper, byte(r))
+		}
+	}
+	return string(upper)
+}
+
+// HashRecoveryCode hashes a normalized recovery code the same way tokens are
+// hashed — only the hash is ever stored, so a leaked database can't be used
+// to sign in as anyone.
+func HashRecoveryCode(code string) string {
+	return HashToken(NormalizeRecoveryCode(code))
+}

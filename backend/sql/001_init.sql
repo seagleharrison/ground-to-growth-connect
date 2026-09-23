@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS users (
   profile_picture_key TEXT,
   profile_picture_mime TEXT,
   token_hash TEXT NOT NULL UNIQUE,
+  -- Hash of the recovery code shown once at sign-up; lets someone who lost
+  -- their phone (or changed numbers) get back into this same account from a
+  -- new device. Older databases get this via dbstore.Migrate.
+  recovery_code_hash TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 

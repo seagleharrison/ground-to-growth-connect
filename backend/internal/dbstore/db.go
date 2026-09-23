@@ -37,6 +37,7 @@ func Open(path string) (*sql.DB, error) {
 var columnsAddedAfterV1 = []struct{ table, column, definition string }{
 	{"users", "profile_picture_key", "TEXT"},
 	{"users", "profile_picture_mime", "TEXT"},
+	{"users", "recovery_code_hash", "TEXT"},
 }
 
 func Migrate(db *sql.DB, migrationSQL string) error {
