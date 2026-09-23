@@ -197,6 +197,15 @@ class _SharingCard extends StatelessWidget {
                 if (tracker.lastError != null) ...[
                   const SizedBox(height: 8),
                   Text(tracker.lastError!, style: const TextStyle(color: Brand.amber, fontSize: 13)),
+                  if (tracker.permissionBlocked) ...[
+                    const SizedBox(height: 8),
+                    TextButton(
+                      key: const Key('open-location-settings'),
+                      onPressed: tracker.openSettings,
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+                      child: const Text('Open Settings', style: TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  ],
                 ],
               ],
               const SizedBox(height: 16),

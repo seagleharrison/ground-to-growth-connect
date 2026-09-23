@@ -18,6 +18,26 @@ class LocationTracker extends ChangeNotifier {
   String? lastError;
   LocationPermission authorizationStatus = LocationPermission.denied;
 
+  /// True once iOS/Android has refused permission outright (rather than just
+  /// not having been asked yet). On iOS especially, the system only shows its
+  /// own permission dialog the first time; asking again silently does
+  /// nothing, so the only way forward from here is the Settings app —
+  /// [openSettings] takes them straight there instead of just saying so.
+  bool permissionBlocked = false;
+
+  /// Lets tests stand in for the real "open Settings" action, which needs a device.
+  @visibleForTesting
+  static Future<bool> Function()? debugOpenSettings;
+
+  Future<void> openSettings() async {
+    final override = debugOpenSettings;
+    if (override != null) {
+      await override();
+      return;
+    }
+    await Geolocator.openAppSettings();
+  }
+
   bool _consentGranted = false;
   DateTime? _lastSentAt;
   bool _pendingReport = false;
@@ -44,11 +64,15 @@ class LocationTracker extends ChangeNotifier {
     }
 
     if (!await Geolocator.isLocationServiceEnabled()) {
-      lastError = 'Location services are disabled.';
+      lastError = 'Location services are turned off on this phone. Turn them on in Settings to share your location.';
+      permissionBlocked = true;
       notifyListeners();
       return;
     }
 
+    // "denied" here means not yet asked (or restricted by the device); only
+    // that case is worth asking about — the OS shows its own dialog once,
+    // ever, and a real refusal comes back as deniedForever, not denied again.
     var status = await Geolocator.checkPermission();
     if (status == LocationPermission.denied) {
       status = await Geolocator.requestPermission();
@@ -58,11 +82,16 @@ class LocationTracker extends ChangeNotifier {
     switch (status) {
       case LocationPermission.always:
       case LocationPermission.whileInUse:
+        permissionBlocked = false;
         _beginUpdates();
       case LocationPermission.denied:
       case LocationPermission.deniedForever:
         _stopTracking();
-        lastError = 'Location permission denied. Enable in Settings.';
+        // Asking again from here on would do nothing (deniedForever is a real
+        // refusal; a lingering denied means the device itself restricts it) —
+        // either way, Settings is the only path left.
+        permissionBlocked = true;
+        lastError = "Location permission was turned off for this app. Turn it back on in your phone's Settings to keep sharing your location.";
       case LocationPermission.unableToDetermine:
         break;
     }
@@ -81,6 +110,11 @@ class LocationTracker extends ChangeNotifier {
     ).listen(
       (position) => _reportIfNeeded(position),
       onError: (Object e) {
+        // Permission can be pulled out from under an already-running session
+        // (e.g. turned off in Settings mid-day) — this is what actually
+        // happened in the field: iOS's own "kCLErrorDomain error 1" surfaced
+        // here as a PermissionDeniedException, not through the checks above.
+        if (e is PermissionDeniedException) permissionBlocked = true;
         lastError = friendlyLocationError(e);
         notifyListeners();
       },

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import '../models/models.dart';
+import '../services/location_tracker.dart';
 import '../theme/app_theme.dart';
 import '../util/journey.dart';
 import '../util/time.dart';
@@ -195,6 +196,17 @@ class _MapTabViewState extends State<MapTabView> with TickerProviderStateMixin, 
                         ],
                       ),
                     ),
+                    ListenableBuilder(
+                      listenable: app.locationTracker,
+                      builder: (context, _) {
+                        final tracker = app.locationTracker;
+                        if (app.consent?.granted != true || tracker.lastError == null) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: _LocationErrorBanner(tracker: tracker),
+                        );
+                      },
+                    ),
                     const Padding(padding: EdgeInsets.only(left: 12, top: 6), child: MapCredit()),
                   ],
                 ),
@@ -310,6 +322,44 @@ class _ShareToggleChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Shown when this staff member turned sharing on but it isn't actually
+/// reaching the server — most often a permission the phone won't ask about
+/// again, so this offers the direct way to fix it rather than just a message.
+class _LocationErrorBanner extends StatelessWidget {
+  final LocationTracker tracker;
+  const _LocationErrorBanner({required this.tracker});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      radius: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber_rounded, size: 18, color: Brand.amber),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tracker.lastError!, style: const TextStyle(color: Brand.amber, fontSize: 13, height: 1.3)),
+                if (tracker.permissionBlocked)
+                  TextButton(
+                    key: const Key('open-location-settings-map'),
+                    onPressed: tracker.openSettings,
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft, minimumSize: const Size(0, 32)),
+                    child: const Text('Open Settings', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
