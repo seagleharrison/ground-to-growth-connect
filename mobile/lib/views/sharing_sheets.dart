@@ -7,17 +7,20 @@ import '../widgets/ui.dart';
 
 /// The informed-consent step for sharing location. The full disclosure text is
 /// shown and must be agreed to; nothing is shared until the person taps agree.
-Future<void> showSharingConsentSheet(BuildContext context) {
+/// [forStaff] swaps the wording for staff sharing with each other, rather than
+/// a participant sharing with the outreach team.
+Future<void> showSharingConsentSheet(BuildContext context, {bool forStaff = false}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => const _ConsentSheet(),
+    builder: (_) => _ConsentSheet(forStaff: forStaff),
   );
 }
 
 class _ConsentSheet extends StatelessWidget {
-  const _ConsentSheet();
+  final bool forStaff;
+  const _ConsentSheet({required this.forStaff});
 
   @override
   Widget build(BuildContext context) {
@@ -45,17 +48,31 @@ class _ConsentSheet extends StatelessWidget {
                   child: const Icon(Icons.location_on_rounded, size: 34, color: Color(0xFF3A1D00)),
                 ),
                 const SizedBox(height: 18),
-                Text('Share your location?', style: Theme.of(context).textTheme.headlineSmall),
+                Text(forStaff ? 'Share your location with staff?' : 'Share your location?', style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
-                const Text(
-                  'This helps our outreach team find you and bring help to you. It is your choice, and you can stop any time.',
-                  style: TextStyle(fontSize: 16, height: 1.4, color: Colors.white70),
+                Text(
+                  forStaff
+                      ? 'This helps other Ground to Growth staff find you and coordinate outreach. It is your choice, and you can stop any time.'
+                      : 'This helps our outreach team find you and bring help to you. It is your choice, and you can stop any time.',
+                  style: const TextStyle(fontSize: 16, height: 1.4, color: Colors.white70),
                 ),
                 const SizedBox(height: 22),
                 const _Point(Icons.grid_on_rounded, 'Blurred for your privacy', 'Your spot is rounded to about 200 meters before it leaves your phone.'),
                 const _Point(Icons.schedule_rounded, 'Every 15 minutes', 'Just a quick check-in, not constant tracking.'),
-                const _Point(Icons.groups_rounded, 'Only Ground to Growth staff', 'Outreach staff and volunteers who signed in with our code.'),
-                const _Point(Icons.pause_circle_rounded, 'Stop any time', 'Turn it off and it stops right away. Your choice never affects the help you get.'),
+                _Point(
+                  Icons.groups_rounded,
+                  forStaff ? 'Only other staff' : 'Only Ground to Growth staff',
+                  forStaff
+                      ? 'Other outreach staff and volunteers who signed in with our code. People we support never see this.'
+                      : 'Outreach staff and volunteers who signed in with our code.',
+                ),
+                _Point(
+                  Icons.pause_circle_rounded,
+                  'Stop any time',
+                  forStaff
+                      ? 'Turn it off and it stops right away.'
+                      : 'Turn it off and it stops right away. Your choice never affects the help you get.',
+                ),
                 const SizedBox(height: 14),
                 Theme(
                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),

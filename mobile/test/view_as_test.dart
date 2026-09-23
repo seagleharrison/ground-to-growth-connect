@@ -143,7 +143,11 @@ void main() {
   _withApi('the same actions work normally on the admin\'s own view', (tester, api) async {
     final state = await _pump(tester, api, 'admin');
     api.routes.clear();
-    await state.grantConsent();
+    // grantConsent() reaches the real geolocator plugin, which (with none
+    // registered here) waits on real platform-channel timing rather than
+    // resolving from a microtask — run it in the real event loop instead of
+    // the fake-clock test zone, the same way this suite handles real I/O.
+    await tester.runAsync(() => state.grantConsent());
     expect(api.routes, contains('POST /api/consent'));
     expect(state.previewNotice, isNull);
   });
@@ -153,14 +157,14 @@ void main() {
     await _pick(tester, AppView.participant);
     expect(state.isPreviewing, isTrue);
 
-    final error = await state.changeAccountType(PersonType.volunteer, staffCode: FakeApi.staffCode);
+    final error = await tester.runAsync(() => state.changeAccountType(PersonType.volunteer, staffCode: FakeApi.staffCode));
     expect(error, isNull);
     expect(state.previewView, isNull);
     expect(state.currentView, AppView.volunteer);
 
     state.user = User.fromJson({...api.user, 'personType': 'admin', 'isStaff': true});
     state.viewAs(AppView.participant);
-    await state.signOut();
+    await tester.runAsync(() => state.signOut());
     expect(state.previewView, isNull);
     expect(state.previewNotice, isNull);
   });

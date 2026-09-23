@@ -81,7 +81,7 @@ class LocationTracker extends ChangeNotifier {
     ).listen(
       (position) => _reportIfNeeded(position),
       onError: (Object e) {
-        lastError = '$e';
+        lastError = friendlyLocationError(e);
         notifyListeners();
       },
     );
@@ -124,7 +124,7 @@ class LocationTracker extends ChangeNotifier {
     } catch (e) {
       // Roll back so the next update can retry this interval.
       _lastSentAt = previousSentAt;
-      lastError = '$e';
+      lastError = e is GgcException ? e.message : friendlyLocationError(e);
     } finally {
       _pendingReport = false;
       notifyListeners();
@@ -136,4 +136,19 @@ class LocationTracker extends ChangeNotifier {
     _positionSub?.cancel();
     super.dispose();
   }
+}
+
+/// Turns whatever the location plugin throws into something a person would
+/// want to read. The plugin's own exceptions sometimes carry the raw text an
+/// iPhone or Android gives it (e.g. "kCLErrorDomain error 1"), which means
+/// nothing to someone who isn't a developer — this replaces it outright
+/// rather than showing it.
+String friendlyLocationError(Object e) {
+  if (e is LocationServiceDisabledException) {
+    return 'Location services are turned off on this phone. Turn them on in Settings to share your location.';
+  }
+  if (e is PermissionDeniedException) {
+    return "Location permission was turned off for this app. Turn it back on in your phone's Settings to keep sharing your location.";
+  }
+  return "Couldn't get your location just now. We'll keep trying.";
 }

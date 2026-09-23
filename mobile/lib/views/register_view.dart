@@ -36,8 +36,9 @@ class _RegisterViewState extends State<RegisterView> {
 
   bool _canSubmit(AppState app) {
     final nameOk = _nameController.text.trim().isNotEmpty;
+    final phoneOk = _phoneController.text.trim().isNotEmpty;
     final staffOk = !_isStaff || _staffCodeController.text.trim().isNotEmpty;
-    return nameOk && staffOk && !app.isLoading;
+    return nameOk && phoneOk && staffOk && !app.isLoading;
   }
 
   void _submit(AppState app) {
@@ -46,7 +47,7 @@ class _RegisterViewState extends State<RegisterView> {
       name: _nameController.text.trim(),
       email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
       gender: (_gender ?? Gender.preferNotToSay).wireValue,
-      phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+      phone: _phoneController.text.trim(),
       personType: _personType.name,
       staffCode: _isStaff ? _staffCodeController.text.trim() : null,
     ));
@@ -191,8 +192,16 @@ class _RegisterViewState extends State<RegisterView> {
           TextField(
             controller: _nameController,
             textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
+            textInputAction: TextInputAction.next,
             decoration: const InputDecoration(labelText: 'Full name', prefixIcon: Icon(Icons.person_rounded)),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(labelText: 'Phone', prefixIcon: Icon(Icons.phone_rounded)),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 20),
@@ -270,43 +279,37 @@ class _RegisterViewState extends State<RegisterView> {
 
   Widget _optionalDetails(BuildContext context) {
     return AppCard(
-      padding: EdgeInsets.zero,
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          shape: const Border(),
-          collapsedShape: const Border(),
-          tilePadding: const EdgeInsets.symmetric(horizontal: 18),
-          childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-          leading: const Icon(Icons.contact_page_rounded, color: Brand.orange),
-          title: const Text('Add contact details', style: TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: const Text('Optional', style: TextStyle(color: Colors.white54)),
-          children: [
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              autocorrect: false,
-              decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.mail_rounded)),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Phone', prefixIcon: Icon(Icons.phone_rounded)),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<Gender?>(
-              initialValue: _gender,
-              decoration: const InputDecoration(labelText: 'Gender', prefixIcon: Icon(Icons.badge_rounded)),
-              items: [
-                const DropdownMenuItem<Gender?>(value: null, child: Text('Prefer not to say')),
-                for (final g in Gender.values.where((g) => g != Gender.preferNotToSay))
-                  DropdownMenuItem<Gender?>(value: g, child: Text(g.label)),
-              ],
-              onChanged: (g) => setState(() => _gender = g),
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.contact_page_rounded, color: Brand.orange),
+              SizedBox(width: 10),
+              Text('More about you', style: TextStyle(fontWeight: FontWeight.w700)),
+              SizedBox(width: 8),
+              Text('Optional', style: TextStyle(color: Colors.white54)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.mail_rounded)),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<Gender?>(
+            initialValue: _gender,
+            decoration: const InputDecoration(labelText: 'Gender', prefixIcon: Icon(Icons.badge_rounded)),
+            items: [
+              const DropdownMenuItem<Gender?>(value: null, child: Text('Prefer not to say')),
+              for (final g in Gender.values.where((g) => g != Gender.preferNotToSay))
+                DropdownMenuItem<Gender?>(value: g, child: Text(g.label)),
+            ],
+            onChanged: (g) => setState(() => _gender = g),
+          ),
+        ],
       ),
     );
   }

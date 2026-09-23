@@ -280,6 +280,11 @@ class UserLocation {
     accuracyMeters: (json['accuracyMeters'] as num?)?.toDouble(),
     reportedAt: json['reportedAt'] as String,
   );
+
+  /// A colleague sharing their own location, rather than someone being
+  /// supported. The staff map marks these differently so it's never mistaken
+  /// for a participant.
+  bool get isStaffPerson => PersonType.fromWire(personType ?? 'homeless').isStaff;
 }
 
 /// A participant's own reported location — no userId/name, since this always

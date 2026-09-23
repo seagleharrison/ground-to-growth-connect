@@ -134,13 +134,14 @@ class AppState extends ChangeNotifier {
 
     try {
       await _refreshProfile();
+      // Everyone, staff included, can share their own location — staff sharing
+      // is visible only to other staff on the staff map, never to participants.
+      consent = await ApiClient.shared.fetchConsentStatus();
+      consentHistory = await ApiClient.shared.fetchConsentHistory();
+      await locationTracker.updateConsent(granted: consent?.granted == true);
       if (user?.isStaff == true) {
-        // Staff view the participant map and don't share their own location.
+        // Staff also see everyone else who is sharing, on the staff map.
         locations = await ApiClient.shared.fetchLatestLocations();
-      } else {
-        consent = await ApiClient.shared.fetchConsentStatus();
-        consentHistory = await ApiClient.shared.fetchConsentHistory();
-        await locationTracker.updateConsent(granted: consent?.granted == true);
       }
     } on GgcException catch (e) {
       if (e.message.contains('Session expired')) {
@@ -227,15 +228,16 @@ class AppState extends ChangeNotifier {
         sourceReport = null;
       }
       if (updated.isStaff) {
-        // Staff don't share their own location; the server has also ended any sharing.
-        await locationTracker.updateConsent(granted: false);
-        consent = null;
-        consentHistory = [];
+        // Staff don't get document storage; the server has also ended any
+        // location sharing from before the switch, so they opt back in fresh
+        // under the staff wording rather than silently carrying it over.
         documents = [];
         documentConsent = null;
       } else {
         locations = [];
       }
+      // Refetch consent either way: refreshSession pulls the real status for
+      // whichever role they're in now, staff included.
       await refreshSession();
       HapticFeedback.mediumImpact();
       return null;

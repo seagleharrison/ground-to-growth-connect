@@ -14,6 +14,7 @@ import '../util/time.dart';
 import '../widgets/map_kit.dart';
 import '../widgets/ui.dart';
 import 'documents_view.dart' show walletColors, walletGreen, walletIcon;
+import 'sharing_sheets.dart' show showSharingConsentSheet;
 
 /// Staff-only: everyone who is sharing their location, on one map. Search for
 /// someone, tap a person to fly to them, and see at a glance which documents
@@ -141,6 +142,7 @@ class _MapTabViewState extends State<MapTabView> with TickerProviderStateMixin, 
                               name: p.name,
                               ring: ringFor(recencyOf(_seen(p), now: now)),
                               selected: p.userId == _selectedId,
+                              isStaff: p.isStaffPerson,
                             ),
                           ),
                         ),
@@ -181,12 +183,17 @@ class _MapTabViewState extends State<MapTabView> with TickerProviderStateMixin, 
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        _GlassChip(icon: Icons.groups_rounded, label: '${everyone.length} ${everyone.length == 1 ? 'person' : 'people'}'),
-                        const SizedBox(width: 8),
-                        _GlassChip(icon: Icons.circle, iconColor: Brand.green, iconSize: 10, label: '$activeNow active now'),
-                      ],
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _GlassChip(icon: Icons.groups_rounded, label: '${everyone.length} ${everyone.length == 1 ? 'person' : 'people'}'),
+                          const SizedBox(width: 8),
+                          _GlassChip(icon: Icons.circle, iconColor: Brand.green, iconSize: 10, label: '$activeNow active now'),
+                          const SizedBox(width: 8),
+                          _ShareToggleChip(sharing: app.consent?.granted == true),
+                        ],
+                      ),
                     ),
                     const Padding(padding: EdgeInsets.only(left: 12, top: 6), child: MapCredit()),
                   ],
@@ -263,6 +270,46 @@ class _GlassChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
         ],
+      ),
+    );
+  }
+}
+
+/// Staff can share their own location with each other, the same as
+/// participants share theirs with staff. Tapping it while off opens the
+/// consent sheet; while on, it turns sharing off right away.
+class _ShareToggleChip extends StatelessWidget {
+  final bool sharing;
+  const _ShareToggleChip({required this.sharing});
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      key: const Key('share-my-location-chip'),
+      onTap: () {
+        if (sharing) {
+          context.read<AppState>().revokeConsent();
+        } else {
+          showSharingConsentSheet(context, forStaff: true);
+        }
+      },
+      child: GlassPanel(
+        radius: 20,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (sharing)
+              const PulseDot(color: Brand.green, size: 8)
+            else
+              const Icon(Icons.location_on_outlined, size: 16, color: Colors.white70),
+            const SizedBox(width: 6),
+            Text(
+              sharing ? 'Sharing' : 'Share my location',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: sharing ? Brand.green : Colors.white),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -401,7 +448,15 @@ class _PersonRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(person.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  Row(
+                    children: [
+                      Flexible(child: Text(person.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16), overflow: TextOverflow.ellipsis)),
+                      if (person.isStaffPerson) ...[
+                        const SizedBox(width: 6),
+                        const Pill(key: Key('staff-pill'), label: 'Staff', color: Brand.blue),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 2),
                   Text('Seen ${timeAgo(seen, now: now)}', style: const TextStyle(color: Colors.white60, fontSize: 13)),
                 ],
@@ -503,7 +558,15 @@ class _PersonCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(person.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19)),
+                    Row(
+                      children: [
+                        Flexible(child: Text(person.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19), overflow: TextOverflow.ellipsis)),
+                        if (person.isStaffPerson) ...[
+                          const SizedBox(width: 8),
+                          const Pill(key: Key('staff-pill'), label: 'Staff', color: Brand.blue),
+                        ],
+                      ],
+                    ),
                     Text(
                       'Seen ${timeAgo(seen, now: now)} · ${clockTime(seen)}',
                       style: const TextStyle(color: Colors.white60, fontSize: 13),

@@ -123,7 +123,8 @@ class PersonMarker extends StatelessWidget {
   final String name;
   final Color ring;
   final bool selected;
-  const PersonMarker({super.key, required this.name, required this.ring, required this.selected});
+  final bool isStaff;
+  const PersonMarker({super.key, required this.name, required this.ring, required this.selected, this.isStaff = false});
 
   String get _initials {
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
@@ -138,22 +139,46 @@ class PersonMarker extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutBack,
-          width: size,
-          height: size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Brand.surfaceHigh,
-            border: Border.all(color: ring, width: selected ? 4 : 3),
-            boxShadow: [BoxShadow(color: ring.withValues(alpha: 0.6), blurRadius: selected ? 22 : 12)],
-          ),
-          child: Text(
-            _initials,
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: selected ? 18 : 14, color: Colors.white),
-          ),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutBack,
+              width: size,
+              height: size,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Brand.surfaceHigh,
+                border: Border.all(color: ring, width: selected ? 4 : 3),
+                boxShadow: [BoxShadow(color: ring.withValues(alpha: 0.6), blurRadius: selected ? 22 : 12)],
+              ),
+              child: Text(
+                _initials,
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: selected ? 18 : 14, color: Colors.white),
+              ),
+            ),
+            // A small badge marks a colleague sharing their own location, so
+            // staff never confuse a teammate's pin for a participant's.
+            if (isStaff)
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  key: const Key('staff-badge'),
+                  width: 18,
+                  height: 18,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Brand.blue,
+                    border: Border.all(color: Brand.background, width: 2),
+                  ),
+                  child: const Icon(Icons.shield_rounded, size: 10, color: Colors.white),
+                ),
+              ),
+          ],
         ),
         if (selected)
           Container(

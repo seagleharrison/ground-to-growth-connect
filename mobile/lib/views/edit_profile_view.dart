@@ -140,7 +140,7 @@ class _EditProfileViewState extends State<EditProfileView> {
     final user = app.user;
     if (user == null) return const SizedBox.shrink();
 
-    final canSave = _name.text.trim().isNotEmpty && _hasChanges(user) && !app.isSavingProfile;
+    final canSave = _name.text.trim().isNotEmpty && _phone.text.trim().isNotEmpty && _hasChanges(user) && !app.isSavingProfile;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Edit profile')),
@@ -196,7 +196,10 @@ class _EditProfileViewState extends State<EditProfileView> {
           TextField(
             controller: _phone,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Phone (optional)'),
+            decoration: InputDecoration(
+              labelText: 'Phone',
+              errorText: _phone.text.trim().isEmpty ? "Phone can't be blank" : null,
+            ),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<Gender?>(

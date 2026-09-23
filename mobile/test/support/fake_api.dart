@@ -28,6 +28,12 @@ class FakeApi {
     'hasProfilePicture': false,
   };
   final List<Map<String, dynamic>> documents = [];
+
+  /// What GET /api/locations/latest returns to a staff viewer.
+  List<Map<String, dynamic>> staffLocations = [];
+
+  /// What GET /api/documents/on-file returns to a staff viewer: [{userId, documentTypes}].
+  List<Map<String, dynamic>> documentsOnFile = [];
   int analyticsRequests = 0;
 
   /// Every non-tile request the app made, as "METHOD /path", in order.
@@ -58,6 +64,11 @@ class FakeApi {
 
   /// When set, PATCH /api/me fails with this error message.
   String? failProfileUpdateWith;
+
+  /// Whether this account currently has location sharing on, and its history
+  /// of turning it on/off. Backs GET/POST /api/consent*.
+  bool locationConsentGranted = false;
+  final List<Map<String, dynamic>> locationConsentRecords = [];
 
   String? pictureBase64;
   String? pictureMime;
@@ -152,11 +163,26 @@ class FakeApi {
         flaggedSources.removeWhere((s) => s['url'] == url);
         return _json({'total': totalSources, 'lastCheckedAt': '2026-09-21T00:00:00.000Z', 'needsAttention': flaggedSources, 'cannotCheck': blockedSources});
       case 'GET /api/consent/status':
-        return _json({'granted': false});
+        return _json({'granted': locationConsentGranted});
       case 'GET /api/consent/history':
-        return _json({'records': []});
+        return _json({'records': locationConsentRecords.reversed.toList()});
+      case 'POST /api/consent':
+        final granted = (jsonDecode(request.body) as Map<String, dynamic>)['granted'] as bool;
+        locationConsentGranted = granted;
+        final record = {
+          'id': 'c${locationConsentRecords.length + 1}',
+          'consent_version': '1.0',
+          'granted': granted,
+          'granted_at': granted ? '2026-09-21T12:00:00.000Z' : null,
+          'revoked_at': granted ? null : '2026-09-21T12:00:00.000Z',
+          'created_at': '2026-09-21T12:00:00.000Z',
+        };
+        locationConsentRecords.add(record);
+        return _json({'record': record});
       case 'GET /api/locations/latest':
-        return _json({'locations': []});
+        return _json({'locations': staffLocations});
+      case 'GET /api/documents/on-file':
+        return _json({'participants': documentsOnFile});
       case 'GET /api/consent/documents/disclosure':
         return _json({'version': '1.0', 'text': 'Document storage disclosure text.'});
       case 'GET /api/consent/documents/status':
