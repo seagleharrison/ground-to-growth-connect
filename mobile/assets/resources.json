@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-09-21",
+  "updatedAt": "2026-09-24",
   "documentGuides": [
     {
       "id": "birth-certificate",
@@ -108,6 +108,7 @@
         {
           "heading": "How to get it",
           "items": [
+            "Before you go, fill out DDS's online License/ID/Permit form — most DDS offices now require this before they'll see you in person.",
             "Go to a Department of Driver Services (DDS) office and ask for an ID card.",
             "Bring proof of who you are, your Social Security number, that you're a U.S. citizen or here legally, and where you live.",
             "For where you live, DDS accepts a letter from a shelter or care provider where you're staying. It must be on their official letterhead.",
@@ -138,6 +139,10 @@
         {
           "label": "DDS: get an Indigent ID Card",
           "url": "https://dds.georgia.gov/how-do-i-get-indigent-id-card"
+        },
+        {
+          "label": "Fill out the online form before visiting",
+          "url": "https://dds.drives.ga.gov?link=SkipAStep"
         }
       ],
       "phones": [],
@@ -363,7 +368,7 @@
       "links": [
         {
           "label": "Apply for VA health care",
-          "url": "https://www.va.gov/health-care/apply/"
+          "url": "https://www.va.gov/health-care/how-to-apply/"
         }
       ],
       "phones": [
@@ -473,8 +478,8 @@
       },
       "url": "https://dds.georgia.gov/locations/savannah",
       "hours": "Tue–Fri 7:30 a.m.–6:30 p.m., Sat 7:30 a.m.–12 p.m. Closed Sun and Mon.",
-      "note": "Get a Georgia ID card here. Bring your papers, or ask about an Indigent ID voucher first.",
-      "verifiedOn": "2026-09-21"
+      "note": "Get a Georgia ID card here. You must fill out DDS's online form before they'll see you — do that first, then bring your papers, or ask about an Indigent ID voucher.",
+      "verifiedOn": "2026-09-24"
     },
     {
       "id": "chatham-health-dept",
@@ -519,7 +524,7 @@
       },
       "url": "https://www.unionmission.org/",
       "note": "Emergency shelter, housing help, health care and work programs. Call first to ask what is open.",
-      "verifiedOn": "2026-09-21"
+      "verifiedOn": "2026-09-24"
     },
     {
       "id": "va-savannah",

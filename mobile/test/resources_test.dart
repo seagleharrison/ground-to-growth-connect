@@ -298,7 +298,7 @@ void main() {
       await pumpApp(tester, api, 'homeless');
       expect(api.resourcesRequests, greaterThan(0));
       final text = tester.widget<Text>(find.byKey(const Key('freshness-row'))).data!;
-      expect(text, contains('Info updated Sep 21, 2026'));
+      expect(text, contains('Info updated Sep 24, 2026'));
       expect(text, contains('Checked'));
     });
 

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../util/phone.dart';
 import '../widgets/ui.dart';
 import 'account_type_sheet.dart';
 import 'edit_profile_view.dart';
@@ -227,7 +228,7 @@ class _SettingsViewState extends State<SettingsView> {
       if ((user.email ?? '').isNotEmpty)
         _row(Icons.mail_rounded, 'Email', user.email!),
       if ((user.phone ?? '').isNotEmpty)
-        _row(Icons.phone_rounded, 'Phone', user.phone!),
+        _row(Icons.phone_rounded, 'Phone', formatPhoneForDisplay(user.phone!)),
       if ((user.gender ?? '').isNotEmpty)
         _row(
           Icons.badge_rounded,
@@ -290,10 +291,14 @@ class _SettingsViewState extends State<SettingsView> {
         Text(label, style: const TextStyle(color: Colors.white60)),
         const Spacer(),
         Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ),
       ],

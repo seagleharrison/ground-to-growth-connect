@@ -142,6 +142,7 @@ class _SharingCard extends StatelessWidget {
       listenable: tracker,
       builder: (context, _) {
         final last = tracker.lastReportAt;
+        final stale = last != null && isStaleCheckIn(last);
         return AppCard(
           gradient: on
               ? const LinearGradient(
@@ -186,14 +187,21 @@ class _SharingCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Icon(Icons.schedule_rounded, size: 16, color: Colors.white54),
+                    Icon(Icons.schedule_rounded, size: 16, color: stale ? Brand.amber : Colors.white54),
                     const SizedBox(width: 6),
                     Text(
                       last == null ? 'Waiting for your first check-in…' : 'Last check-in ${timeAgo(last)}',
-                      style: const TextStyle(color: Colors.white54, fontSize: 13),
+                      style: TextStyle(color: stale ? Brand.amber : Colors.white54, fontSize: 13),
                     ),
                   ],
                 ),
+                if (stale) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    "That's longer than usual. If you closed the app completely, reopen it now and then to keep sharing.",
+                    style: TextStyle(color: Brand.amber, fontSize: 13, height: 1.35),
+                  ),
+                ],
                 if (tracker.lastError != null) ...[
                   const SizedBox(height: 8),
                   Text(tracker.lastError!, style: const TextStyle(color: Brand.amber, fontSize: 13)),

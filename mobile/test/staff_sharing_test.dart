@@ -124,6 +124,19 @@ void main() {
     expect(participantPills, findsNothing);
   });
 
+  _withApi('a staff member sees themselves in the list too, marked "You"', (tester, api) async {
+    // 'u1' is FakeApi's default signed-in user id.
+    api.staffLocations = [staffLoc('u1', 'Ada Admin', 'admin'), staffLoc('p2', 'Jane Doe', 'homeless')];
+    await _pump(tester, api, 'admin');
+    await _settle(tester);
+
+    expect(find.byKey(const Key('row-u1')), findsOneWidget);
+    final youPillsOnSelf = find.descendant(of: find.byKey(const Key('row-u1')), matching: find.byKey(const Key('you-pill')));
+    final youPillsOnOther = find.descendant(of: find.byKey(const Key('row-p2')), matching: find.byKey(const Key('you-pill')));
+    expect(youPillsOnSelf, findsOneWidget);
+    expect(youPillsOnOther, findsNothing);
+  });
+
   _withApi('an admin previewing as another role cannot turn on sharing without exiting the preview', (tester, api) async {
     final state = await _pump(tester, api, 'admin', start: AppTab.me);
     state.viewAs(AppView.volunteer);

@@ -1,3 +1,12 @@
+/// Three missed 15-minute check-ins in a row is a real gap, not just normal
+/// timing jitter or a slow network — worth flagging rather than staying
+/// silent about it (a stale check-in looks identical to a fresh one
+/// otherwise, whatever actually caused the gap — the app got force-quit, the
+/// phone died, no signal).
+const staleCheckInThreshold = Duration(minutes: 45);
+
+bool isStaleCheckIn(DateTime when, {DateTime? now}) => (now ?? DateTime.now()).difference(when) > staleCheckInThreshold;
+
 /// "4 min ago", "Yesterday", "Sep 12" — how people actually say it.
 String timeAgo(DateTime when, {DateTime? now}) {
   final current = now ?? DateTime.now();

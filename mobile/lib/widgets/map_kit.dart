@@ -124,7 +124,8 @@ class PersonMarker extends StatelessWidget {
   final Color ring;
   final bool selected;
   final bool isStaff;
-  const PersonMarker({super.key, required this.name, required this.ring, required this.selected, this.isStaff = false});
+  final bool isSelf;
+  const PersonMarker({super.key, required this.name, required this.ring, required this.selected, this.isStaff = false, this.isSelf = false});
 
   String get _initials {
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
@@ -185,7 +186,7 @@ class PersonMarker extends StatelessWidget {
             margin: const EdgeInsets.only(top: 4),
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
             decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(12)),
-            child: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+            child: Text(isSelf ? '$name (You)' : name, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
           ),
       ],
     );

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models/models.dart';
 import '../nav.dart';
+import '../services/location_tracker.dart';
 import '../theme/app_theme.dart';
 import '../widgets/nav_bar.dart';
 import 'analytics_view.dart';
@@ -16,11 +17,97 @@ import 'settings_view.dart';
 
 /// Participants get Home, their own Map, Documents, Resources and Me; staff get the
 /// everyone-Map and Me; admins also get Analytics. The bar runs along the bottom.
-class MainTabView extends StatelessWidget {
+class MainTabView extends StatefulWidget {
   const MainTabView({super.key});
 
   @override
+  State<MainTabView> createState() => _MainTabViewState();
+}
+
+class _MainTabViewState extends State<MainTabView> {
+  bool _offeredLocationUpgradesThisLaunch = false;
+
+  /// The moment someone lands in the app with sharing on but something about
+  /// their location setup is worse than it could be, offer the fix directly
+  /// rather than waiting for them to notice a banner — this is what actually
+  /// made check-ins go stale for a tester whose phone sat locked for hours.
+  /// Only asked once per app launch either way, so it never turns into
+  /// nagging, and the two nudges never stack on top of each other.
+  void _maybeOfferLocationUpgrades(AppState app) {
+    if (_offeredLocationUpgradesThisLaunch) return;
+    final tracker = app.locationTracker;
+    if (app.consent?.granted != true) return;
+    final needsAlways = tracker.canUpgradeToAlways && !tracker.alwaysNudgeDismissed;
+    final needsPrecise = tracker.canUpgradeToPrecise && !tracker.preciseNudgeDismissed;
+    if (!needsAlways && !needsPrecise) return;
+    _offeredLocationUpgradesThisLaunch = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (needsAlways) await _showAlwaysDialog(tracker);
+      if (!mounted) return;
+      if (needsPrecise) await _showPreciseDialog(tracker);
+    });
+  }
+
+  Future<void> _showAlwaysDialog(LocationTracker tracker) async {
+    final turnOn = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Keep sharing while your phone is locked?'),
+        content: const Text(
+          'Right now we can only see your location while the app is open. Choosing '
+          '"Always Allow" for Location in Settings lets us check in every 15 minutes '
+          "even when your phone is locked or in your pocket.",
+        ),
+        actions: [
+          TextButton(
+            key: const Key('always-nudge-not-now'),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Not now'),
+          ),
+          TextButton(
+            key: const Key('always-nudge-open-settings'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Turn On'),
+          ),
+        ],
+      ),
+    );
+    tracker.dismissAlwaysNudge();
+    if (turnOn == true) await tracker.openSettings();
+  }
+
+  Future<void> _showPreciseDialog(LocationTracker tracker) async {
+    final turnOn = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Make your location more accurate?'),
+        content: const Text(
+          'Precise Location is turned off for this app, so your spot on the map could '
+          'be off by a mile or more. Turning it on in Settings gives our outreach team '
+          'your exact location instead of just a general area.',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('precise-nudge-not-now'),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Not now'),
+          ),
+          TextButton(
+            key: const Key('precise-nudge-open-settings'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Turn On'),
+          ),
+        ],
+      ),
+    );
+    tracker.dismissPreciseNudge();
+    if (turnOn == true) await tracker.openSettings();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
     // What to show follows the current view: an admin's own, or the preview they picked.
     final view = context.select<AppState, AppView>((a) => a.currentView);
     final previewing = context.select<AppState, bool>((a) => a.isPreviewing);
@@ -41,6 +128,24 @@ class MainTabView extends StatelessWidget {
       });
     }
 
+    return ListenableBuilder(
+      listenable: app.locationTracker,
+      builder: (context, _) {
+        _maybeOfferLocationUpgrades(app);
+        return _buildScaffold(context, app: app, isStaff: isStaff, isAdmin: isAdmin, previewing: previewing, view: view, nav: nav);
+      },
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context, {
+    required AppState app,
+    required bool isStaff,
+    required bool isAdmin,
+    required bool previewing,
+    required AppView view,
+    required TabNav nav,
+  }) {
     final tabs = <({AppTab tab, NavItem item, Widget view})>[
       if (!isStaff)
         (

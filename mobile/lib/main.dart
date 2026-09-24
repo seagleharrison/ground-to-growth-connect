@@ -69,6 +69,10 @@ class _RootViewState extends State<RootView> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed && app.isSignedIn) {
       // Coming back to the app: make sure the Resources info is still current.
       app.resources.refreshIfStale();
+      // Also pick up any location permission change made in Settings — e.g.
+      // granting "Always" after tapping the upgrade prompt, or fixing a
+      // permission that got pulled out from under an active session.
+      app.locationTracker.refreshAuthorizationStatus();
     }
   }
 

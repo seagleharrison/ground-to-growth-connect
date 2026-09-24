@@ -25,6 +25,41 @@ class LocationTracker extends ChangeNotifier {
   /// [openSettings] takes them straight there instead of just saying so.
   bool permissionBlocked = false;
 
+  /// True while sharing works, but only because the app is open or was
+  /// recently backgrounded — "While Using" access doesn't wake the app once
+  /// it's been locked/backgrounded for a while, so check-ins silently stop.
+  /// "Always" access is what makes the 15-minute promise hold when a phone
+  /// stays locked for hours (confirmed in the field: a tester's check-ins
+  /// ran fine, then stopped for 17+ hours the moment the phone was left
+  /// locked).
+  bool get canUpgradeToAlways => authorizationStatus == LocationPermission.whileInUse;
+
+  /// Dismissing the "turn on Always" nudge only lasts this app session — it
+  /// isn't nagging forever, but it also isn't gone forever, since it matters.
+  bool alwaysNudgeDismissed = false;
+
+  void dismissAlwaysNudge() {
+    alwaysNudgeDismissed = true;
+    notifyListeners();
+  }
+
+  /// iOS's separate "Precise Location" toggle — independent of Always/While
+  /// Using. Starts as [precise] rather than [reduced] so a fresh tracker
+  /// doesn't flash a false nudge before its first real check completes.
+  LocationAccuracyStatus accuracyStatus = LocationAccuracyStatus.precise;
+
+  /// True when someone has turned Precise Location off for this app — check-ins
+  /// still happen, but each one can be off by a mile or more, which matters a
+  /// lot for outreach trying to actually find someone.
+  bool get canUpgradeToPrecise => accuracyStatus == LocationAccuracyStatus.reduced;
+
+  bool preciseNudgeDismissed = false;
+
+  void dismissPreciseNudge() {
+    preciseNudgeDismissed = true;
+    notifyListeners();
+  }
+
   /// Lets tests stand in for the real "open Settings" action, which needs a device.
   @visibleForTesting
   static Future<bool> Function()? debugOpenSettings;
@@ -58,6 +93,11 @@ class LocationTracker extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Re-checks permission and location-services state without waiting for
+  /// consent to be toggled off and back on — needed when someone comes back
+  /// from the Settings app, since nothing else notices a change made there.
+  Future<void> refreshAuthorizationStatus() => _startIfAuthorized();
+
   Future<void> _startIfAuthorized() async {
     if (!_consentGranted) {
       _stopTracking();
@@ -84,6 +124,7 @@ class LocationTracker extends ChangeNotifier {
       case LocationPermission.always:
       case LocationPermission.whileInUse:
         permissionBlocked = false;
+        accuracyStatus = await Geolocator.getLocationAccuracy();
         _beginUpdates();
       case LocationPermission.denied:
       case LocationPermission.deniedForever:
@@ -104,15 +145,7 @@ class LocationTracker extends ChangeNotifier {
     lastError = null;
     _positionSub?.cancel();
     _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        // The distance filter alone only reports when someone actually
-        // moves 100m+ — someone staying in one place (sleeping rough, at a
-        // day center, or just not walking around) would otherwise never
-        // check in again after the first report. The periodic timer below
-        // is what actually guarantees the every-15-minutes promise.
-        accuracy: LocationAccuracy.medium,
-        distanceFilter: 100,
-      ),
+      locationSettings: _platformLocationSettings(),
     ).listen(
       (position) => _reportIfNeeded(position),
       onError: (Object e) {
@@ -196,6 +229,33 @@ class LocationTracker extends ChangeNotifier {
     _periodicTimer?.cancel();
     super.dispose();
   }
+}
+
+/// The distance filter alone only reports when someone actually moves
+/// 100m+, and the periodic timer only fires while the app process is
+/// actually alive — on iOS, neither one matters if the OS suspends the app
+/// the moment it's backgrounded. `AppleSettings.allowBackgroundLocationUpdates`
+/// is what actually keeps it running: without it, even "Always" permission
+/// still gets suspended in the background (confirmed the hard way — a
+/// tester's check-ins worked once, then stopped for 17+ hours the moment his
+/// phone sat locked, because this flag was never being set).
+LocationSettings _platformLocationSettings() {
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    return AppleSettings(
+      accuracy: LocationAccuracy.medium,
+      distanceFilter: 100,
+      allowBackgroundLocationUpdates: true,
+      // Otherwise iOS pauses updates exactly when someone stops moving —
+      // the one case this app most needs to keep reporting through.
+      pauseLocationUpdatesAutomatically: false,
+      // The honest signal that something is still watching in the
+      // background, matching the consent this app already asks for.
+      showBackgroundLocationIndicator: true,
+    );
+  }
+  // Android background delivery needs its own foreground-service setup,
+  // which hasn't been built yet — plain settings are correct until it is.
+  return const LocationSettings(accuracy: LocationAccuracy.medium, distanceFilter: 100);
 }
 
 /// Turns whatever the location plugin throws into something a person would

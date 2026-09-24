@@ -1,9 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
 import 'package:ground_to_growth_connect/services/location_tracker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -17,6 +17,7 @@ class FakeGeolocatorPlatform extends GeolocatorPlatform with MockPlatformInterfa
   double lat = 32.0809;
   double lng = -81.0912;
   int currentPositionCalls = 0;
+  LocationSettings? lastPositionStreamSettings;
   final _controller = StreamController<Position>.broadcast();
 
   Position _position() => Position(
@@ -49,6 +50,11 @@ class FakeGeolocatorPlatform extends GeolocatorPlatform with MockPlatformInterfa
   @override
   Future<bool> isLocationServiceEnabled() async => serviceEnabled;
 
+  LocationAccuracyStatus accuracyStatus = LocationAccuracyStatus.precise;
+
+  @override
+  Future<LocationAccuracyStatus> getLocationAccuracy() async => accuracyStatus;
+
   @override
   Future<Position> getCurrentPosition({LocationSettings? locationSettings}) async {
     currentPositionCalls++;
@@ -57,7 +63,10 @@ class FakeGeolocatorPlatform extends GeolocatorPlatform with MockPlatformInterfa
   }
 
   @override
-  Stream<Position> getPositionStream({LocationSettings? locationSettings}) => _controller.stream;
+  Stream<Position> getPositionStream({LocationSettings? locationSettings}) {
+    lastPositionStreamSettings = locationSettings;
+    return _controller.stream;
+  }
 
   @override
   Future<bool> openAppSettings() async => true;
@@ -163,5 +172,119 @@ void main() {
   test('ApiClient plumbing sanity: dispose without ever starting is harmless', () {
     final tracker = LocationTracker();
     tracker.dispose();
+  });
+
+  group('refreshAuthorizationStatus (called when the app resumes from the background)', () {
+    testWidgets('picks up a permission grant made in the Settings app, without needing sharing toggled off and on', (tester) async {
+      await withClient(() async {
+        fakePlatform.permission = LocationPermission.deniedForever;
+        final tracker = LocationTracker();
+        await tracker.updateConsent(granted: true);
+        await tester.pump();
+
+        expect(tracker.permissionBlocked, isTrue);
+        expect(tracker.lastError, isNotNull);
+        expect(posted, isEmpty, reason: 'permission is blocked, nothing should have been reported');
+
+        // They leave the app, grant "Always" in Settings, and come back.
+        fakePlatform.permission = LocationPermission.always;
+        await tracker.refreshAuthorizationStatus();
+        await tester.pump();
+
+        expect(tracker.permissionBlocked, isFalse);
+        expect(tracker.lastError, isNull);
+        expect(tracker.authorizationStatus, LocationPermission.always);
+        expect(tracker.canUpgradeToAlways, isFalse);
+        expect(posted.length, 1, reason: 'now authorized, the first check-in goes out');
+        tracker.dispose();
+      });
+    });
+
+    testWidgets('a permission that is still only "While Using" leaves canUpgradeToAlways true', (tester) async {
+      await withClient(() async {
+        final tracker = LocationTracker();
+        await tracker.updateConsent(granted: true);
+        await tester.pump();
+        expect(tracker.canUpgradeToAlways, isTrue);
+
+        await tracker.refreshAuthorizationStatus();
+        await tester.pump();
+
+        expect(tracker.canUpgradeToAlways, isTrue);
+        tracker.dispose();
+      });
+    });
+
+    testWidgets('does nothing when sharing was never turned on', (tester) async {
+      final tracker = LocationTracker();
+      await tracker.refreshAuthorizationStatus();
+      expect(tracker.isTracking, isFalse);
+      expect(fakePlatform.currentPositionCalls, 0);
+      tracker.dispose();
+    });
+  });
+
+  group('background delivery on iOS', () {
+    testWidgets(
+      'turns on allowBackgroundLocationUpdates — without this, "Always" permission alone still gets suspended in the background',
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        await withClient(() async {
+          final tracker = LocationTracker();
+          await tracker.updateConsent(granted: true);
+          await tester.pump();
+
+          final settings = fakePlatform.lastPositionStreamSettings;
+          expect(settings, isA<AppleSettings>());
+          final apple = settings as AppleSettings;
+          expect(apple.allowBackgroundLocationUpdates, isTrue);
+          expect(apple.pauseLocationUpdatesAutomatically, isFalse, reason: 'auto-pause would stop updates exactly when someone stops moving');
+          tracker.dispose();
+        });
+        debugDefaultTargetPlatformOverride = null;
+      },
+    );
+  });
+
+  group('Precise Location (separate from Always/While Using)', () {
+    testWidgets('reduced accuracy is picked up and offers the upgrade', (tester) async {
+      await withClient(() async {
+        fakePlatform.accuracyStatus = LocationAccuracyStatus.reduced;
+        final tracker = LocationTracker();
+        await tracker.updateConsent(granted: true);
+        await tester.pump();
+
+        expect(tracker.canUpgradeToPrecise, isTrue);
+        tracker.dispose();
+      });
+    });
+
+    testWidgets('precise accuracy needs no upgrade', (tester) async {
+      await withClient(() async {
+        final tracker = LocationTracker();
+        await tracker.updateConsent(granted: true);
+        await tester.pump();
+
+        expect(tracker.canUpgradeToPrecise, isFalse);
+        tracker.dispose();
+      });
+    });
+
+    testWidgets('refreshAuthorizationStatus picks up Precise Location being turned on in Settings', (tester) async {
+      await withClient(() async {
+        fakePlatform.accuracyStatus = LocationAccuracyStatus.reduced;
+        final tracker = LocationTracker();
+        await tracker.updateConsent(granted: true);
+        await tester.pump();
+        expect(tracker.canUpgradeToPrecise, isTrue);
+
+        fakePlatform.accuracyStatus = LocationAccuracyStatus.precise;
+        await tracker.refreshAuthorizationStatus();
+        await tester.pump();
+
+        expect(tracker.canUpgradeToPrecise, isFalse);
+        tracker.dispose();
+      });
+    });
   });
 }

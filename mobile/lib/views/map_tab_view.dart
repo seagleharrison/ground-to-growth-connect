@@ -144,6 +144,7 @@ class _MapTabViewState extends State<MapTabView> with TickerProviderStateMixin, 
                               ring: ringFor(recencyOf(_seen(p), now: now)),
                               selected: p.userId == _selectedId,
                               isStaff: p.isStaffPerson,
+                              isSelf: p.userId == app.user?.id,
                             ),
                           ),
                         ),
@@ -200,10 +201,14 @@ class _MapTabViewState extends State<MapTabView> with TickerProviderStateMixin, 
                       listenable: app.locationTracker,
                       builder: (context, _) {
                         final tracker = app.locationTracker;
-                        if (app.consent?.granted != true || tracker.lastError == null) return const SizedBox.shrink();
+                        if (app.consent?.granted != true) return const SizedBox.shrink();
+                        // A staff member never sees their own pin among
+                        // "everyone" (they already know where they are), so
+                        // this is the only place they can confirm their own
+                        // sharing is actually working, not just turned on.
                         return Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: _LocationErrorBanner(tracker: tracker),
+                          child: tracker.lastError != null ? _LocationErrorBanner(tracker: tracker) : _SelfSharingStatus(tracker: tracker),
                         );
                       },
                     ),
@@ -251,6 +256,7 @@ class _MapTabViewState extends State<MapTabView> with TickerProviderStateMixin, 
                   selected: selected,
                   now: now,
                   documentsOnFile: app.documentsOnFile,
+                  selfId: app.user?.id,
                   onSelect: _select,
                   onClearSelection: () => setState(() => _selectedId = null),
                 ),
@@ -365,6 +371,35 @@ class _LocationErrorBanner extends StatelessWidget {
   }
 }
 
+class _SelfSharingStatus extends StatelessWidget {
+  final LocationTracker tracker;
+  const _SelfSharingStatus({required this.tracker});
+
+  @override
+  Widget build(BuildContext context) {
+    final last = tracker.lastReportAt;
+    final stale = last != null && isStaleCheckIn(last);
+    final color = stale ? Brand.amber : Brand.green;
+    return GlassPanel(
+      radius: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          Icon(stale ? Icons.warning_amber_rounded : Icons.check_circle_rounded, size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              last == null ? 'Sharing on — waiting for your first check-in…' : 'Sharing on — your last check-in was ${timeAgo(last)}',
+              key: const Key('self-sharing-status'),
+              style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PeopleSheet extends StatelessWidget {
   final ScrollController scroll;
   final List<UserLocation> people;
@@ -372,6 +407,7 @@ class _PeopleSheet extends StatelessWidget {
   final UserLocation? selected;
   final DateTime now;
   final Map<String, Set<DocumentType>> documentsOnFile;
+  final String? selfId;
   final ValueChanged<UserLocation> onSelect;
   final VoidCallback onClearSelection;
 
@@ -382,6 +418,7 @@ class _PeopleSheet extends StatelessWidget {
     required this.selected,
     required this.now,
     required this.documentsOnFile,
+    required this.selfId,
     required this.onSelect,
     required this.onClearSelection,
   });
@@ -419,7 +456,13 @@ class _PeopleSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           if (selected != null) ...[
-            _PersonCard(person: selected!, now: now, types: documentsOnFile[selected!.userId] ?? const {}, onClose: onClearSelection),
+            _PersonCard(
+              person: selected!,
+              now: now,
+              types: documentsOnFile[selected!.userId] ?? const {},
+              isSelf: selected!.userId == selfId,
+              onClose: onClearSelection,
+            ),
             const SizedBox(height: 14),
           ],
           if (people.isEmpty)
@@ -448,6 +491,7 @@ class _PeopleSheet extends StatelessWidget {
                 person: p,
                 now: now,
                 types: documentsOnFile[p.userId] ?? const {},
+                isSelf: p.userId == selfId,
                 onTap: () => onSelect(p),
               ),
         ],
@@ -475,9 +519,10 @@ class _PersonRow extends StatelessWidget {
   final UserLocation person;
   final DateTime now;
   final Set<DocumentType> types;
+  final bool isSelf;
   final VoidCallback onTap;
 
-  const _PersonRow({required this.person, required this.now, required this.types, required this.onTap});
+  const _PersonRow({required this.person, required this.now, required this.types, this.isSelf = false, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -501,6 +546,10 @@ class _PersonRow extends StatelessWidget {
                   Row(
                     children: [
                       Flexible(child: Text(person.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16), overflow: TextOverflow.ellipsis)),
+                      if (isSelf) ...[
+                        const SizedBox(width: 6),
+                        const Pill(key: Key('you-pill'), label: 'You', color: Brand.orange),
+                      ],
                       if (person.isStaffPerson) ...[
                         const SizedBox(width: 6),
                         const Pill(key: Key('staff-pill'), label: 'Staff', color: Brand.blue),
@@ -508,7 +557,7 @@ class _PersonRow extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text('Seen ${timeAgo(seen, now: now)}', style: const TextStyle(color: Colors.white60, fontSize: 13)),
+                  Text('Seen ${timeAgo(seen, now: now)}', style: TextStyle(color: ring, fontSize: 13)),
                 ],
               ),
             ),
@@ -579,9 +628,10 @@ class _PersonCard extends StatelessWidget {
   final UserLocation person;
   final DateTime now;
   final Set<DocumentType> types;
+  final bool isSelf;
   final VoidCallback onClose;
 
-  const _PersonCard({required this.person, required this.now, required this.types, required this.onClose});
+  const _PersonCard({required this.person, required this.now, required this.types, this.isSelf = false, required this.onClose});
 
   @override
   Widget build(BuildContext context) {
@@ -611,6 +661,10 @@ class _PersonCard extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(child: Text(person.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19), overflow: TextOverflow.ellipsis)),
+                        if (isSelf) ...[
+                          const SizedBox(width: 8),
+                          const Pill(key: Key('you-pill'), label: 'You', color: Brand.orange),
+                        ],
                         if (person.isStaffPerson) ...[
                           const SizedBox(width: 8),
                           const Pill(key: Key('staff-pill'), label: 'Staff', color: Brand.blue),
@@ -619,7 +673,7 @@ class _PersonCard extends StatelessWidget {
                     ),
                     Text(
                       'Seen ${timeAgo(seen, now: now)} · ${clockTime(seen)}',
-                      style: const TextStyle(color: Colors.white60, fontSize: 13),
+                      style: TextStyle(color: ring, fontSize: 13),
                     ),
                   ],
                 ),
