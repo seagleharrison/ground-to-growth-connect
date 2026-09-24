@@ -619,7 +619,6 @@ type userLocationJSON struct {
 }
 
 func (s *Server) handleLatestLocations(w http.ResponseWriter, r *http.Request) {
-	viewer := userFromCtx(r)
 	rows, err := s.db.Query(`
 		SELECT user_id, name_encrypted, person_type, latitude_encrypted, longitude_encrypted,
 		       accuracy_meters, reported_at
@@ -643,10 +642,10 @@ func (s *Server) handleLatestLocations(w http.ResponseWriter, r *http.Request) {
 		  JOIN user_consent_status cs ON cs.user_id = u.id AND cs.granted = 1
 		  -- Everyone who is sharing shows up here: participants, and staff who
 		  -- turned on their own sharing so other staff can find them in the
-		  -- field. A person never sees themselves in this list.
-		  WHERE u.id != ?
+		  -- field — including the viewer themselves, so a staff member can
+		  -- confirm their own sharing the same way they'd check anyone else's.
 		)
-		WHERE rn = 1`, viewer.ID)
+		WHERE rn = 1`)
 	if err != nil {
 		writeInternalError(w, err)
 		return

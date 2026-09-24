@@ -427,7 +427,7 @@ func TestStaffCanShareAndOtherStaffSeeThem(t *testing.T) {
 	}
 }
 
-func TestSharingStaffNeverSeeThemselvesInTheList(t *testing.T) {
+func TestSharingStaffSeeThemselvesInTheList(t *testing.T) {
 	h := newTestServer(t)
 
 	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Outreach Sam", "personType": "volunteer", "staffCode": testStaffCode})
@@ -438,8 +438,11 @@ func TestSharingStaffNeverSeeThemselvesInTheList(t *testing.T) {
 	var body map[string]interface{}
 	decodeJSON(t, rec, &body)
 	locations, _ := body["locations"].([]interface{})
-	if len(locations) != 0 {
-		t.Fatalf("a sharing staff member must not see their own pin, got %d", len(locations))
+	if len(locations) != 1 {
+		t.Fatalf("a sharing staff member should see their own pin like anyone else's, got %d", len(locations))
+	}
+	if locations[0].(map[string]interface{})["name"] != "Outreach Sam" {
+		t.Fatalf("expected to see themselves, got %v", locations[0])
 	}
 }
 
