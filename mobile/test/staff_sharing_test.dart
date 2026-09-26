@@ -19,7 +19,10 @@ Map<String, dynamic> staffLoc(String id, String name, String personType, {int mi
       'reportedAt': DateTime.now().toUtc().subtract(Duration(minutes: minsAgo)).toIso8601String(),
     };
 
-Future<AppState> _pump(WidgetTester tester, FakeApi api, String personType, {AppTab start = AppTab.map}) async {
+/// Ends with the staff "everyone" Map on screen either way — an admin gets
+/// there straight from the bottom bar; a volunteer no longer has a Map tab,
+/// so this follows the same path they would: Settings, then the Map card.
+Future<AppState> _pump(WidgetTester tester, FakeApi api, String personType, {AppTab? start}) async {
   tester.view.physicalSize = const Size(1200, 3200);
   tester.view.devicePixelRatio = 2.0;
   addTearDown(tester.view.reset);
@@ -30,15 +33,22 @@ Future<AppState> _pump(WidgetTester tester, FakeApi api, String personType, {App
     ..user = User.fromJson(api.user)
     ..isUnlocked = true
     ..disclosure = DisclosureResponse(version: '1.0', text: 'Location disclosure text.');
+  final startTab = start ?? (personType == 'volunteer' ? AppTab.me : AppTab.map);
   await tester.pumpWidget(MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: state),
-      ChangeNotifierProvider(create: (_) => TabNav(current: start)),
+      ChangeNotifierProvider(create: (_) => TabNav(current: startTab)),
     ],
     child: const MaterialApp(home: MainTabView()),
   ));
   for (var i = 0; i < 4; i++) {
     await tester.pump(const Duration(milliseconds: 300));
+  }
+  if (start == null && personType == 'volunteer') {
+    await tester.tap(find.byKey(const Key('open-staff-map')));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
   }
   return state;
 }
@@ -141,8 +151,8 @@ void main() {
     final state = await _pump(tester, api, 'admin', start: AppTab.me);
     state.viewAs(AppView.volunteer);
     await tester.pump(const Duration(milliseconds: 400));
-    await tester.tap(find.text('Map').last);
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byKey(const Key('open-staff-map')));
+    await _settle(tester);
 
     await tester.tap(find.byKey(const Key('share-my-location-chip')));
     await _settle(tester);

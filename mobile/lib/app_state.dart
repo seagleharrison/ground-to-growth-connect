@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'models/models.dart';
 import 'services/api_client.dart';
+import 'services/calendar_controller.dart';
 import 'services/location_tracker.dart';
 import 'services/resources_controller.dart';
 import 'services/secure_storage_service.dart';
@@ -18,14 +19,20 @@ class AppState extends ChangeNotifier {
   /// on so any screen watching AppState updates too.
   final resources = ResourcesController();
 
+  /// The Calendar tab's shelter events and the person's own appointments.
+  final calendar = CalendarController();
+
   AppState() {
     resources.addListener(notifyListeners);
+    calendar.addListener(notifyListeners);
   }
 
   @override
   void dispose() {
     resources.removeListener(notifyListeners);
     resources.dispose();
+    calendar.removeListener(notifyListeners);
+    calendar.dispose();
     super.dispose();
   }
 

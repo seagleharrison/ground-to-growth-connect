@@ -399,6 +399,37 @@ class DocumentMeta {
   );
 }
 
+/// A participant's own appointment — private to them; nothing staff-facing
+/// ever reads this.
+class Appointment {
+  final String id;
+  final String title;
+  final String? notes;
+  final String? location;
+  final String startsAt;
+  final String createdAt;
+
+  Appointment({
+    required this.id,
+    required this.title,
+    this.notes,
+    this.location,
+    required this.startsAt,
+    required this.createdAt,
+  });
+
+  DateTime get startsAtLocal => DateTime.parse(startsAt).toLocal();
+
+  factory Appointment.fromJson(Map<String, dynamic> json) => Appointment(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    notes: json['notes'] as String?,
+    location: json['location'] as String?,
+    startsAt: json['startsAt'] as String,
+    createdAt: json['createdAt'] as String,
+  );
+}
+
 /// Staff-only: which document *types* a participant has on file. Staff never
 /// see the documents themselves — only that they exist.
 class DocumentsOnFile {

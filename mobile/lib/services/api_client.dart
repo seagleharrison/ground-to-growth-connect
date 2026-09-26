@@ -237,6 +237,64 @@ class ApiClient {
     );
   }
 
+  /// Shelter/program events for the Calendar tab. Public, same ETag pattern as Resources.
+  Future<({int status, String? body, String? etag})> fetchEvents({String? etag}) async {
+    final base = (await _baseUrl).replaceAll(RegExp(r'/+$'), '');
+    final response = await http
+        .get(Uri.parse('$base/api/events'), headers: {
+          'User-Agent': 'GroundToGrowthConnect-Flutter/0.1',
+          'If-None-Match': ?etag,
+        })
+        .timeout(const Duration(seconds: 15));
+    return (
+      status: response.statusCode,
+      body: response.statusCode == 200 ? response.body : null,
+      etag: response.headers['etag'],
+    );
+  }
+
+  // MARK: - Personal appointments (private to the signed-in person)
+
+  Future<Appointment> createAppointment({
+    required String title,
+    String? notes,
+    String? location,
+    required String startsAt,
+  }) async {
+    final json = await _request(
+      path: '/api/appointments',
+      method: 'POST',
+      body: {'title': title, 'notes': ?notes, 'location': ?location, 'startsAt': startsAt},
+    );
+    return Appointment.fromJson(json['appointment'] as Map<String, dynamic>);
+  }
+
+  Future<List<Appointment>> fetchAppointments() async {
+    final json = await _request(path: '/api/appointments');
+    return (json['appointments'] as List)
+        .map((a) => Appointment.fromJson(a as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Appointment> updateAppointment(
+    String id, {
+    String? title,
+    String? notes,
+    String? location,
+    String? startsAt,
+  }) async {
+    final json = await _request(
+      path: '/api/appointments/$id',
+      method: 'PATCH',
+      body: {'title': ?title, 'notes': ?notes, 'location': ?location, 'startsAt': ?startsAt},
+    );
+    return Appointment.fromJson(json['appointment'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteAppointment(String id) async {
+    await _request(path: '/api/appointments/$id', method: 'DELETE');
+  }
+
   /// Admin only. Official pages the Resources content points to that vanished or changed.
   Future<SourceReport> fetchSourceReport() async {
     final json = await _request(path: '/api/analytics/sources');

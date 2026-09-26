@@ -8,15 +8,17 @@ import '../services/location_tracker.dart';
 import '../theme/app_theme.dart';
 import '../widgets/nav_bar.dart';
 import 'analytics_view.dart';
+import 'calendar_view.dart';
 import 'documents_view.dart';
 import 'home_view.dart';
 import 'map_tab_view.dart';
-import 'my_map_tab_view.dart';
 import 'resources_view.dart';
 import 'settings_view.dart';
 
-/// Participants get Home, their own Map, Documents, Resources and Me; staff get the
-/// everyone-Map and Me; admins also get Analytics. The bar runs along the bottom.
+/// Participants get Home, Calendar, Documents, Resources and Me. Volunteers
+/// just get Me — the staff "everyone" Map lives inside their Settings instead
+/// of the bottom bar. Admins get the bottom-bar Map plus Analytics. The bar
+/// runs along the bottom.
 class MainTabView extends StatefulWidget {
   const MainTabView({super.key});
 
@@ -132,7 +134,15 @@ class _MainTabViewState extends State<MainTabView> {
       listenable: app.locationTracker,
       builder: (context, _) {
         _maybeOfferLocationUpgrades(app);
-        return _buildScaffold(context, app: app, isStaff: isStaff, isAdmin: isAdmin, previewing: previewing, view: view, nav: nav);
+        return _buildScaffold(
+          context,
+          app: app,
+          isStaff: isStaff,
+          isAdmin: isAdmin,
+          previewing: previewing,
+          view: view,
+          nav: nav,
+        );
       },
     );
   }
@@ -153,11 +163,20 @@ class _MainTabViewState extends State<MainTabView> {
           item: const NavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
           view: const HomeView(),
         ),
-      (
-        tab: AppTab.map,
-        item: const NavItem(Icons.map_outlined, Icons.map_rounded, 'Map'),
-        view: isStaff ? const MapTabView() : const MyMapTabView(),
-      ),
+      // Volunteers find Map inside Settings instead of the bottom bar —
+      // admin keeps it here since the staff "everyone" map is core to that role.
+      if (isAdmin)
+        (
+          tab: AppTab.map,
+          item: const NavItem(Icons.map_outlined, Icons.map_rounded, 'Map'),
+          view: const MapTabView(),
+        ),
+      if (!isStaff)
+        (
+          tab: AppTab.calendar,
+          item: const NavItem(Icons.calendar_today_outlined, Icons.calendar_month_rounded, 'Calendar'),
+          view: const CalendarView(),
+        ),
       if (!isStaff)
         (
           tab: AppTab.documents,

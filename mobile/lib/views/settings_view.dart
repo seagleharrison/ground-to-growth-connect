@@ -8,6 +8,7 @@ import '../util/phone.dart';
 import '../widgets/ui.dart';
 import 'account_type_sheet.dart';
 import 'edit_profile_view.dart';
+import 'map_tab_view.dart';
 import 'profile_avatar.dart';
 
 class SettingsView extends StatefulWidget {
@@ -92,6 +93,41 @@ class _SettingsViewState extends State<SettingsView> {
               ),
             ),
           ),
+          // Follows the previewed role, not just the real account, so an
+          // admin previewing as volunteer sees exactly what a volunteer sees
+          // — including how they'd actually reach the Map.
+          if (app.currentView == AppView.volunteer) ...[
+            const SizedBox(height: 12),
+            FadeSlideIn(
+              delay: const Duration(milliseconds: 130),
+              child: AppCard(
+                key: const Key('open-staff-map'),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MapTabView())),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.map_rounded, color: Brand.orange),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Map', style: TextStyle(fontWeight: FontWeight.w700)),
+                          SizedBox(height: 2),
+                          Text(
+                            'See everyone sharing their location',
+                            style: TextStyle(color: Colors.white54, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                  ],
+                ),
+              ),
+            ),
+          ],
           if (app.user!.isAdmin) ...[
             const SizedBox(height: 12),
             FadeSlideIn(

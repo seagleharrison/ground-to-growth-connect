@@ -74,6 +74,19 @@ class SecureStorageService {
     return (json: json, etag: await _storage.read(key: 'resources_etag'));
   }
 
+  /// The last shelter/program events fetched from the server, same reasoning
+  /// as the Resources cache above.
+  static Future<void> saveEventsCache({required String json, String? etag}) async {
+    await _storage.write(key: 'events_json', value: json);
+    if (etag != null) await _storage.write(key: 'events_etag', value: etag);
+  }
+
+  static Future<({String json, String? etag})?> loadEventsCache() async {
+    final json = await _storage.read(key: 'events_json');
+    if (json == null) return null;
+    return (json: json, etag: await _storage.read(key: 'events_etag'));
+  }
+
   static Future<void> clearSession() async {
     await deleteToken();
     await deleteUser();

@@ -67,8 +67,10 @@ class _RootViewState extends State<RootView> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       app.setUnlocked(false);
     } else if (state == AppLifecycleState.resumed && app.isSignedIn) {
-      // Coming back to the app: make sure the Resources info is still current.
+      // Coming back to the app: make sure the Resources and Calendar info is
+      // still current.
       app.resources.refreshIfStale();
+      app.calendar.refreshEventsIfStale();
       // Also pick up any location permission change made in Settings — e.g.
       // granting "Always" after tapping the upgrade prompt, or fixing a
       // permission that got pulled out from under an active session.

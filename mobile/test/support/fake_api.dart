@@ -46,6 +46,19 @@ class FakeApi {
   String? lastIfNoneMatch;
   bool failResources = false;
 
+  /// What GET /api/events returns; null answers 404, same shape as resources above.
+  String? eventsBody;
+  // Derived from the actual content, not a fixed string: the secure-storage
+  // mock persists across tests in the same file, so a constant etag here
+  // would 304 a later test into showing an earlier test's cached content.
+  String get eventsEtag => '"${eventsBody.hashCode}"';
+  int eventsRequests = 0;
+  String? lastEventsIfNoneMatch;
+
+  /// This person's own appointments (private — see /api/appointments*).
+  final List<Map<String, dynamic>> appointments = [];
+  int _nextAppointmentId = 1;
+
   /// What GET /api/analytics/sources returns for an admin.
   List<Map<String, dynamic>> flaggedSources = [];
   List<Map<String, dynamic>> blockedSources = [];
@@ -146,6 +159,25 @@ class FakeApi {
       return _json({'document': doc, 'fileBase64': tinyPngBase64});
     }
 
+    // PATCH/DELETE /api/appointments/{id}
+    final apptMatch = RegExp(r'^/api/appointments/(a\d+)$').firstMatch(request.url.path);
+    if (apptMatch != null) {
+      final id = apptMatch.group(1);
+      final existing = appointments.where((a) => a['id'] == id).firstOrNull;
+      if (existing == null) return _json({'error': 'Not found'}, status: 404);
+      if (request.method == 'PATCH') {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        for (final key in ['title', 'notes', 'location', 'startsAt']) {
+          if (body.containsKey(key)) existing[key] = body[key];
+        }
+        return _json({'appointment': existing});
+      }
+      if (request.method == 'DELETE') {
+        appointments.removeWhere((a) => a['id'] == id);
+        return _json({'deleted': true});
+      }
+    }
+
     switch (route) {
       case 'GET /api/me':
         return _json({'user': user});
@@ -204,6 +236,26 @@ class FakeApi {
         if (resourcesBody == null) return http.Response('{"error":"Not found"}', 404);
         if (lastIfNoneMatch == resourcesEtag) return http.Response('', 304, headers: {'etag': resourcesEtag});
         return http.Response(resourcesBody!, 200, headers: {'content-type': 'application/json', 'etag': resourcesEtag});
+      case 'GET /api/events':
+        eventsRequests++;
+        lastEventsIfNoneMatch = request.headers['if-none-match'];
+        if (eventsBody == null) return http.Response('{"error":"Not found"}', 404);
+        if (lastEventsIfNoneMatch == eventsEtag) return http.Response('', 304, headers: {'etag': eventsEtag});
+        return http.Response(eventsBody!, 200, headers: {'content-type': 'application/json', 'etag': eventsEtag});
+      case 'GET /api/appointments':
+        return _json({'appointments': appointments});
+      case 'POST /api/appointments':
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final appt = {
+          'id': 'a${_nextAppointmentId++}',
+          'title': body['title'],
+          'notes': (body['notes'] as String?)?.isEmpty == true ? null : body['notes'],
+          'location': (body['location'] as String?)?.isEmpty == true ? null : body['location'],
+          'startsAt': body['startsAt'],
+          'createdAt': '2026-09-26T12:00:00.000Z',
+        };
+        appointments.add(appt);
+        return _json({'appointment': appt}, status: 201);
       case 'GET /api/analytics/sources':
         if (user['personType'] != 'admin') return _json({'error': 'Admin access required'}, status: 403);
         return _json({'total': totalSources, 'lastCheckedAt': '2026-09-21T00:00:00.000Z', 'needsAttention': flaggedSources, 'cannotCheck': blockedSources});

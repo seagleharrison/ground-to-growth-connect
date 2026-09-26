@@ -83,7 +83,9 @@ void main() {
     expect(find.text('Analytics'), findsNothing, reason: 'volunteers have no Analytics');
     expect(find.text('Home'), findsNothing);
     expect(find.text('Documents'), findsNothing);
-    expect(find.text('Map'), findsWidgets);
+    // Volunteers find Map inside Settings, not as its own bottom-bar tab —
+    // previewing as volunteer lands here (Me) and shows the same card.
+    expect(find.byKey(const Key('open-staff-map')), findsOneWidget);
 
     // The account itself is untouched.
     expect(state.user!.personType, 'admin');
@@ -102,7 +104,7 @@ void main() {
 
     expect(state.currentView, AppView.participant);
     expect(find.text('Previewing as Getting support'), findsOneWidget);
-    for (final label in ['Home', 'Map', 'Documents', 'Resources', 'Me']) {
+    for (final label in ['Home', 'Calendar', 'Documents', 'Resources', 'Me']) {
       expect(find.text(label), findsWidgets, reason: '$label tab');
     }
     expect(find.text('Analytics'), findsNothing);
