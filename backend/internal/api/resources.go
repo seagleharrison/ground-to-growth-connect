@@ -26,6 +26,21 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(content.JSON())
 }
 
+// handleEvents serves shelter/program events for participants' Calendar tab.
+// Public for the same reason resources are: no sign-in needed to read it.
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	etag := content.EventsETag()
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(content.EventsJSON())
+}
+
 // handleSourceReport tells an admin which official pages need another look.
 func (s *Server) handleSourceReport(w http.ResponseWriter, r *http.Request) {
 	rep, err := freshness.BuildReport(s.db)

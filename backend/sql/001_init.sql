@@ -167,3 +167,26 @@ CREATE TABLE IF NOT EXISTS source_checks (
   checked_at TEXT NOT NULL,
   first_checked_at TEXT NOT NULL
 );
+
+-- A participant's own appointments (case worker meetings, ID appointments,
+-- etc.), private to them alone — unlike location or documents, staff have no
+-- visibility into this table at all, by design.
+CREATE TABLE IF NOT EXISTS appointments (
+  id TEXT PRIMARY KEY DEFAULT (
+    lower(hex(randomblob(4))) || '-' ||
+    lower(hex(randomblob(2))) || '-4' ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    substr('89ab', abs(random()) % 4 + 1, 1) ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    lower(hex(randomblob(6)))
+  ),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title_encrypted BLOB NOT NULL,
+  notes_encrypted BLOB,
+  location_encrypted BLOB,
+  starts_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_appointments_user_starts
+  ON appointments(user_id, starts_at);
