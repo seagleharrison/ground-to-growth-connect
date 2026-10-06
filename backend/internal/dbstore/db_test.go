@@ -111,6 +111,10 @@ func TestMigrateUpgradesAnExistingDatabase(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO users (id, name_encrypted, token_hash) VALUES ('u1', x'00', 'hash1')`); err != nil {
 		t.Fatal(err)
 	}
+	// A volunteer who signed up long before approval existed.
+	if _, err := db.Exec(`INSERT INTO users (id, person_type, name_encrypted, token_hash) VALUES ('v1', 'volunteer', x'00', 'hash2')`); err != nil {
+		t.Fatal(err)
+	}
 	if userColumns(t, db)["profile_picture_key"] {
 		t.Fatal("test setup should start without the new column")
 	}
@@ -129,6 +133,22 @@ func TestMigrateUpgradesAnExistingDatabase(t *testing.T) {
 	var n int
 	if err := db.QueryRow(`SELECT count(*) FROM users WHERE id = 'u1'`).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("existing user should survive the upgrade (n=%d, err=%v)", n, err)
+	}
+
+	// Nobody who was already a volunteer may be locked out by the new approval
+	// step, and nobody starts out with messaging switched off.
+	var approved, disabled int
+	if err := db.QueryRow(`SELECT volunteer_approved, messaging_disabled FROM users WHERE id = 'v1'`).Scan(&approved, &disabled); err != nil {
+		t.Fatal(err)
+	}
+	if approved != 1 || disabled != 0 {
+		t.Fatalf("existing volunteers must stay approved and unpaused, got approved=%d disabled=%d", approved, disabled)
+	}
+	for _, table := range []string{"appointments", "help_requests", "messages", "blocks", "reports", "message_access_log", "push_tokens"} {
+		var c int
+		if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&c); err != nil || c != 1 {
+			t.Fatalf("expected table %s after migrating (c=%d, err=%v)", table, c, err)
+		}
 	}
 }
 

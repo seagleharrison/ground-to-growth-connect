@@ -140,6 +140,33 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if !isStaff(u.PersonType) && isStaff(personType) {
 		s.revokeLocationConsentIfGranted(u.ID)
 	}
+
+	// The invite code gets someone in, but a new volunteer still has to be
+	// approved by an admin; admins are always approved.
+	if personType == "volunteer" && !isStaff(u.PersonType) {
+		if _, err := s.db.Exec(`UPDATE users SET volunteer_approved = 0 WHERE id = ?`, u.ID); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		u.VolunteerApproved = false
+		s.notifyAdminsOfPendingVolunteer(u.ID)
+	}
+	if personType == "admin" {
+		if _, err := s.db.Exec(`UPDATE users SET volunteer_approved = 1 WHERE id = ?`, u.ID); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		u.VolunteerApproved = true
+	}
+	// Someone leaving a staff role hands back whatever they'd taken on.
+	if isStaff(u.PersonType) && !isStaff(personType) {
+		if _, err := s.db.Exec(
+			`UPDATE help_requests SET status = 'open', claimed_by = NULL, claimed_at = NULL WHERE claimed_by = ? AND status = 'claimed'`, u.ID,
+		); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+	}
 	u.PersonType = personType
 
 	u.NameEncrypted, u.EmailEncrypted, u.GenderEncrypted, u.PhoneEncrypted = nameEnc, emailEnc, genderEnc, phoneEnc

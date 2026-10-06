@@ -17,6 +17,7 @@ import (
 	"ground-to-growth-connect-backend/internal/content"
 	"ground-to-growth-connect-backend/internal/dbstore"
 	"ground-to-growth-connect-backend/internal/freshness"
+	"ground-to-growth-connect-backend/internal/push"
 )
 
 //go:embed sql/001_init.sql
@@ -122,7 +123,20 @@ func main() {
 		go freshness.NewChecker(db, content.SourceURLs).Loop(watchCtx, 24*time.Hour)
 	}
 
-	handler := api.NewServer(db, docs)
+	// Notifications to phones turn on once an Apple push key is configured
+	// (APNS_KEY_PATH, APNS_KEY_ID, APNS_TEAM_ID, APNS_TOPIC); until then the
+	// rest of the app works the same.
+	var apiOpts []api.Option
+	pusher, err := push.FromEnv()
+	if err != nil {
+		log.Printf("push notifications are off: %v", err)
+	} else if pusher != nil {
+		apiOpts = append(apiOpts, api.WithPush(pusher))
+		log.Printf("push notifications are on")
+	} else {
+		log.Printf("push notifications are off (no Apple key configured)")
+	}
+	handler := api.NewServer(db, docs, apiOpts...)
 	srv := &http.Server{
 		Addr:              host + ":" + port,
 		Handler:           handler,

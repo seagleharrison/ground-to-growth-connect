@@ -19,3 +19,7 @@ ios/**/*.xcuserstate
 ios/**/xcuserdata/
 *.ipa
 *.dSYM.zip
+
+# Apple push key and other secrets
+secrets/
+*.p8

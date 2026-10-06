@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS users (
   -- their phone (or changed numbers) get back into this same account from a
   -- new device. Older databases get this via dbstore.Migrate.
   recovery_code_hash TEXT,
+  -- New volunteers start unapproved: until an admin approves them they can't
+  -- see requests, locations or message anyone. Older databases get both
+  -- columns via dbstore.Migrate (existing staff stay approved).
+  volunteer_approved INTEGER NOT NULL DEFAULT 1,
+  -- An admin can switch someone's messaging off outright.
+  messaging_disabled INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
@@ -190,3 +196,106 @@ CREATE TABLE IF NOT EXISTS appointments (
 
 CREATE INDEX IF NOT EXISTS idx_appointments_user_starts
   ON appointments(user_id, starts_at);
+
+-- What a participant has asked for help with ("a ride", "ID help"...). Unlike
+-- appointments, staff can see these: that is the point of posting one. A
+-- volunteer "claims" a request to say they're on it. An appointment is only
+-- visible to staff if the participant attached it to a request.
+CREATE TABLE IF NOT EXISTS help_requests (
+  id TEXT PRIMARY KEY DEFAULT (
+    lower(hex(randomblob(4))) || '-' ||
+    lower(hex(randomblob(2))) || '-4' ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    substr('89ab', abs(random()) % 4 + 1, 1) ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    lower(hex(randomblob(6)))
+  ),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category TEXT NOT NULL
+    CHECK (category IN ('food', 'shelter', 'ride', 'documents', 'clothing', 'health', 'work', 'other')),
+  note_encrypted BLOB,
+  appointment_id TEXT REFERENCES appointments(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'claimed', 'done')),
+  claimed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  claimed_at TEXT,
+  completed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_help_requests_user ON help_requests(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_help_requests_status ON help_requests(status, created_at);
+
+-- One-to-one chat between a participant and the staff member helping them (or
+-- the Ground to Growth team). Encrypted at rest; deleted with either account.
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY DEFAULT (
+    lower(hex(randomblob(4))) || '-' ||
+    lower(hex(randomblob(2))) || '-4' ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    substr('89ab', abs(random()) % 4 + 1, 1) ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    lower(hex(randomblob(6)))
+  ),
+  sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body_encrypted BLOB NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  read_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages(sender_id, recipient_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_inbox ON messages(recipient_id, read_at);
+
+-- A person getting support can block someone; neither can message the other
+-- afterwards and the blocked volunteer no longer sees their requests.
+CREATE TABLE IF NOT EXISTS blocks (
+  blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  PRIMARY KEY (blocker_id, blocked_id)
+);
+
+-- "Report a problem": anyone can flag a person, and admins review them.
+CREATE TABLE IF NOT EXISTS reports (
+  id TEXT PRIMARY KEY DEFAULT (
+    lower(hex(randomblob(4))) || '-' ||
+    lower(hex(randomblob(2))) || '-4' ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    substr('89ab', abs(random()) % 4 + 1, 1) ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    lower(hex(randomblob(6)))
+  ),
+  reporter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason_encrypted BLOB,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  resolved_at TEXT,
+  resolved_by TEXT REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at);
+
+-- Every time an admin opens someone's conversation. Messages are private to
+-- the two people in them unless an admin reviews them for safety, and this is
+-- the record that says who looked and when.
+CREATE TABLE IF NOT EXISTS message_access_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  user_a TEXT NOT NULL,
+  user_b TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- Phones that should get a notification for this person. A token belongs to
+-- one phone, so when someone else signs in on that phone it moves to them, and
+-- it is removed on sign-out.
+CREATE TABLE IF NOT EXISTS push_tokens (
+  token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  environment TEXT NOT NULL DEFAULT 'production' CHECK (environment IN ('production', 'sandbox')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id);

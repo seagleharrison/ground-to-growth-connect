@@ -213,14 +213,18 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var u authUser
 	u.PersonType = personType
 	err = s.db.QueryRow(
-		`INSERT INTO users (person_type, name_encrypted, email_encrypted, gender_encrypted, phone_encrypted, token_hash, recovery_code_hash)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO users (person_type, name_encrypted, email_encrypted, gender_encrypted, phone_encrypted, token_hash, recovery_code_hash, volunteer_approved)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		 RETURNING id, name_encrypted, email_encrypted, gender_encrypted, phone_encrypted`,
-		personType, nameEnc, emailEnc, genderEnc, phoneEnc, tokenHash, cryptox.HashRecoveryCode(recoveryCode),
+		personType, nameEnc, emailEnc, genderEnc, phoneEnc, tokenHash, cryptox.HashRecoveryCode(recoveryCode), personType != "volunteer",
 	).Scan(&u.ID, &u.NameEncrypted, &u.EmailEncrypted, &u.GenderEncrypted, &u.PhoneEncrypted)
 	if err != nil {
 		writeInternalError(w, err)
 		return
+	}
+
+	if personType == "volunteer" {
+		s.notifyAdminsOfPendingVolunteer(u.ID)
 	}
 
 	profile, err := profileFromUser(&u)

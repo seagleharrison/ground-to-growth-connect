@@ -14,6 +14,11 @@ import (
 	"ground-to-growth-connect-backend/internal/dbstore"
 )
 
+// approveInTests marks a freshly registered volunteer approved, so the many
+// tests that just need a working volunteer don't each repeat the admin step.
+// It is set by setupTestServerWithStore for the server under test.
+var approveInTests func(userID string)
+
 const testEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 const testStaffCode = "test-staff-code"
 
@@ -32,6 +37,11 @@ func setupTestServer(t *testing.T) (http.Handler, *sql.DB) {
 // setupTestServerWithStore is setupTestServer plus the blob store, for tests
 // that need to check what is (or isn't) left in it.
 func setupTestServerWithStore(t *testing.T) (http.Handler, *sql.DB, blobstore.Store) {
+	t.Helper()
+	return setupTestServerWithOptions(t)
+}
+
+func setupTestServerWithOptions(t *testing.T, opts ...Option) (http.Handler, *sql.DB, blobstore.Store) {
 	t.Helper()
 	t.Setenv("ENCRYPTION_KEY", testEncryptionKey)
 	t.Setenv("STAFF_INVITE_CODE", testStaffCode)
@@ -58,7 +68,12 @@ func setupTestServerWithStore(t *testing.T) (http.Handler, *sql.DB, blobstore.St
 		t.Fatalf("blobstore.NewLocalDiskStore: %v", err)
 	}
 
-	return NewServer(db, docs), db, docs
+	approveInTests = func(userID string) {
+		if _, err := db.Exec(`UPDATE users SET volunteer_approved = 1 WHERE id = ?`, userID); err != nil {
+			t.Fatalf("approve: %v", err)
+		}
+	}
+	return NewServer(db, docs, opts...), db, docs
 }
 
 func newTestServer(t *testing.T) http.Handler {
@@ -103,6 +118,9 @@ func registerUser(t *testing.T, h http.Handler, payload map[string]interface{}) 
 	if _, ok := payload["phone"]; !ok {
 		payload["phone"] = "912-555-0100"
 	}
+	// "_unapproved" keeps a new volunteer in the state real sign-ups start in.
+	_, keepUnapproved := payload["_unapproved"]
+	delete(payload, "_unapproved")
 	rec := doRequest(t, h, http.MethodPost, "/api/users", "", payload)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("register: expected 201, got %d: %s", rec.Code, rec.Body.String())
@@ -113,6 +131,9 @@ func registerUser(t *testing.T, h http.Handler, payload map[string]interface{}) 
 	user, _ = resp["user"].(map[string]interface{})
 	if token == "" {
 		t.Fatalf("register: expected non-empty token, got response %v", resp)
+	}
+	if payload["personType"] == "volunteer" && !keepUnapproved && approveInTests != nil {
+		approveInTests(user["id"].(string))
 	}
 	return token, user
 }

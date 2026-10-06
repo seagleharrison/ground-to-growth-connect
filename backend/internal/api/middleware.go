@@ -31,6 +31,17 @@ type authUser struct {
 	// Set once the user has uploaded a profile picture.
 	ProfilePictureKey  sql.NullString
 	ProfilePictureMime sql.NullString
+
+	// Volunteers need an admin's approval before they can act as staff.
+	VolunteerApproved bool
+	MessagingDisabled bool
+}
+
+// canActAsStaff is true for admins and for volunteers an admin has approved.
+// The staff invite code alone isn't enough to see people's requests, names or
+// locations.
+func (u *authUser) canActAsStaff() bool {
+	return u.PersonType == "admin" || (u.PersonType == "volunteer" && u.VolunteerApproved)
 }
 
 type ctxKey int
@@ -56,11 +67,11 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 		var u authUser
 		err := s.db.QueryRow(
 			`SELECT id, person_type, name_encrypted, email_encrypted, gender_encrypted, phone_encrypted,
-			        profile_picture_key, profile_picture_mime
+			        profile_picture_key, profile_picture_mime, volunteer_approved, messaging_disabled
 			 FROM users WHERE token_hash = ?`,
 			tokenHash,
 		).Scan(&u.ID, &u.PersonType, &u.NameEncrypted, &u.EmailEncrypted, &u.GenderEncrypted, &u.PhoneEncrypted,
-			&u.ProfilePictureKey, &u.ProfilePictureMime)
+			&u.ProfilePictureKey, &u.ProfilePictureMime, &u.VolunteerApproved, &u.MessagingDisabled)
 		if err == sql.ErrNoRows {
 			writeError(w, http.StatusUnauthorized, "Invalid token")
 			return
@@ -80,6 +91,23 @@ func (s *Server) withStaff(next http.HandlerFunc) http.HandlerFunc {
 		u := userFromCtx(r)
 		if !isStaff(u.PersonType) {
 			writeError(w, http.StatusForbidden, "Staff access required")
+			return
+		}
+		next(w, r)
+	}
+}
+
+// withApprovedStaff is withStaff plus approval: a volunteer an admin hasn't
+// approved yet gets a clear message instead of anyone's information.
+func (s *Server) withApprovedStaff(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		u := userFromCtx(r)
+		if !isStaff(u.PersonType) {
+			writeError(w, http.StatusForbidden, "Staff access required")
+			return
+		}
+		if !u.canActAsStaff() {
+			writeError(w, http.StatusForbidden, "An admin needs to approve your volunteer account before you can do this.")
 			return
 		}
 		next(w, r)

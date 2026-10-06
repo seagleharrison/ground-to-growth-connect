@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"ground-to-growth-connect-backend/internal/blobstore"
+	"ground-to-growth-connect-backend/internal/push"
 )
 
 type Server struct {
@@ -18,10 +19,17 @@ type Server struct {
 	docs         blobstore.Store
 	corsOrigins  []string
 	corsWildcard bool
+
+	// push is nil until an Apple key is configured.
+	push     push.Sender
+	pushSync bool
 }
 
-func NewServer(db *sql.DB, docs blobstore.Store) http.Handler {
+func NewServer(db *sql.DB, docs blobstore.Store, opts ...Option) http.Handler {
 	s := &Server{db: db, docs: docs}
+	for _, opt := range opts {
+		opt(s)
+	}
 
 	raw := os.Getenv("CORS_ORIGIN")
 	if raw == "" {
@@ -62,13 +70,44 @@ func NewServer(db *sql.DB, docs blobstore.Store) http.Handler {
 	mux.HandleFunc("POST /api/consent/documents", s.withAuth(s.handleSetDocumentConsent))
 
 	mux.HandleFunc("POST /api/locations", s.withAuth(s.withConsent(s.handleCreateLocation)))
-	mux.HandleFunc("GET /api/locations/latest", s.withAuth(s.withStaff(s.handleLatestLocations)))
+	mux.HandleFunc("GET /api/locations/latest", s.withAuth(s.withApprovedStaff(s.handleLatestLocations)))
 	mux.HandleFunc("GET /api/resources", s.handleResources)
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	mux.HandleFunc("POST /api/appointments", s.withAuth(s.handleCreateAppointment))
 	mux.HandleFunc("GET /api/appointments", s.withAuth(s.handleListAppointments))
 	mux.HandleFunc("PATCH /api/appointments/{id}", s.withAuth(s.handleUpdateAppointment))
 	mux.HandleFunc("DELETE /api/appointments/{id}", s.withAuth(s.handleDeleteAppointment))
+
+	mux.HandleFunc("POST /api/help-requests", s.withAuth(s.handleCreateHelpRequest))
+	mux.HandleFunc("GET /api/help-requests/mine", s.withAuth(s.handleMyHelpRequests))
+	mux.HandleFunc("GET /api/help-requests", s.withAuth(s.withApprovedStaff(s.handleHelpBoard)))
+	mux.HandleFunc("POST /api/help-requests/{id}/claim", s.withAuth(s.withApprovedStaff(s.handleClaimHelpRequest)))
+	mux.HandleFunc("POST /api/help-requests/{id}/release", s.withAuth(s.withApprovedStaff(s.handleReleaseHelpRequest)))
+	mux.HandleFunc("POST /api/help-requests/{id}/complete", s.withAuth(s.handleCompleteHelpRequest))
+	mux.HandleFunc("DELETE /api/help-requests/{id}", s.withAuth(s.handleDeleteHelpRequest))
+
+	mux.HandleFunc("GET /api/conversations", s.withAuth(s.handleConversations))
+	mux.HandleFunc("GET /api/messages/{userId}", s.withAuth(s.handleGetMessages))
+	mux.HandleFunc("POST /api/messages/{userId}", s.withAuth(s.handleSendMessage))
+
+	mux.HandleFunc("PUT /api/push-token", s.withAuth(s.handleRegisterPushToken))
+	mux.HandleFunc("DELETE /api/push-token", s.withAuth(s.handleUnregisterPushToken))
+
+	mux.HandleFunc("POST /api/blocks", s.withAuth(s.handleBlock))
+	mux.HandleFunc("GET /api/blocks", s.withAuth(s.handleListBlocks))
+	mux.HandleFunc("DELETE /api/blocks/{userId}", s.withAuth(s.handleUnblock))
+	mux.HandleFunc("POST /api/reports", s.withAuth(s.handleCreateReport))
+	mux.HandleFunc("GET /api/reports", s.withAuth(s.withAdmin(s.handleListReports)))
+	mux.HandleFunc("POST /api/reports/{id}/resolve", s.withAuth(s.withAdmin(s.handleResolveReport)))
+
+	mux.HandleFunc("GET /api/admin/conversations", s.withAuth(s.withAdmin(s.handleAdminConversations)))
+	mux.HandleFunc("GET /api/admin/conversations/{a}/{b}", s.withAuth(s.withAdmin(s.handleAdminReadConversation)))
+	mux.HandleFunc("GET /api/admin/access-log", s.withAuth(s.withAdmin(s.handleMessageAccessLog)))
+	mux.HandleFunc("GET /api/admin/volunteers", s.withAuth(s.withAdmin(s.handleListVolunteers)))
+	mux.HandleFunc("POST /api/admin/volunteers/{id}/approve", s.withAuth(s.withAdmin(s.handleApproveVolunteer)))
+	mux.HandleFunc("POST /api/admin/volunteers/{id}/revoke", s.withAuth(s.withAdmin(s.handleRevokeVolunteer)))
+	mux.HandleFunc("POST /api/admin/volunteers/{id}/pause", s.withAuth(s.withAdmin(s.handlePauseVolunteer)))
+	mux.HandleFunc("POST /api/admin/volunteers/{id}/unpause", s.withAuth(s.withAdmin(s.handleUnpauseVolunteer)))
 	mux.HandleFunc("GET /api/analytics", s.withAuth(s.withAdmin(s.handleAnalytics)))
 	mux.HandleFunc("GET /api/analytics/sources", s.withAuth(s.withAdmin(s.handleSourceReport)))
 	mux.HandleFunc("POST /api/analytics/sources/reviewed", s.withAuth(s.withAdmin(s.handleSourceReviewed)))
@@ -76,7 +115,7 @@ func NewServer(db *sql.DB, docs blobstore.Store) http.Handler {
 
 	mux.HandleFunc("POST /api/documents", s.withAuth(s.withDocumentConsent(s.handleUploadDocument)))
 	mux.HandleFunc("GET /api/documents", s.withAuth(s.handleListDocuments))
-	mux.HandleFunc("GET /api/documents/on-file", s.withAuth(s.withStaff(s.handleDocumentsOnFile)))
+	mux.HandleFunc("GET /api/documents/on-file", s.withAuth(s.withApprovedStaff(s.handleDocumentsOnFile)))
 	mux.HandleFunc("GET /api/documents/{id}", s.withAuth(s.handleGetDocument))
 	mux.HandleFunc("DELETE /api/documents/{id}", s.withAuth(s.handleDeleteDocument))
 

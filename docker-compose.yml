@@ -15,6 +15,9 @@ services:
       SQLITE_PATH: /data/locvault.db
     volumes:
       - g2g_data:/data
+      # Apple push key (AuthKey_XXXX.p8), kept out of git. Optional: without it
+      # the app works the same, just with no push notifications.
+      - ./secrets:/secrets:ro
     ports:
       # Defaults to localhost-only so the API isn't publicly exposed unless you
       # front it with Caddy (profile "tls") or your own proxy. To expose it

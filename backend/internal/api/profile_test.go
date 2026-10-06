@@ -400,8 +400,14 @@ func TestChangeToStaffWithTheRightCode(t *testing.T) {
 	if got := getMe(t, h, token); got["personType"] != "volunteer" {
 		t.Fatalf("change did not persist: %v", got)
 	}
+	// The invite code gets someone in, but an admin still has to approve a new
+	// volunteer before they can see anyone's location.
+	if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", token, nil).Code; code != http.StatusForbidden {
+		t.Fatalf("an unapproved volunteer must not reach the staff map, got %d", code)
+	}
+	approveInTests(updated["id"].(string))
 	if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", token, nil).Code; code != http.StatusOK {
-		t.Fatalf("staff should now reach the staff map, got %d", code)
+		t.Fatalf("an approved volunteer should reach the staff map, got %d", code)
 	}
 }
 
