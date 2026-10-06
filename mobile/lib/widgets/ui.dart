@@ -370,3 +370,9 @@ class LargeTitlePage extends StatelessWidget {
     );
   }
 }
+
+/// The app's buttons are full width by default. Where buttons sit side by side
+/// (in a Row or Wrap) they need to be their own size instead — a full-width
+/// button inside a Row has no width to fill and fails to lay out.
+final compactFilled = FilledButton.styleFrom(minimumSize: const Size(0, 44));
+final compactOutlined = OutlinedButton.styleFrom(minimumSize: const Size(0, 44));

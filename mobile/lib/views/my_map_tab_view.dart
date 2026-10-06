@@ -440,7 +440,11 @@ class _MyMapTabViewState extends State<MyMapTabView> with TickerProviderStateMix
         if (!sharing) ...[
           const SizedBox(height: 14),
           OutlinedButton(
-            onPressed: () => context.read<TabNav>().go(AppTab.home),
+            onPressed: () {
+              context.read<TabNav>().go(AppTab.home);
+              // Opened from Settings now, so close this screen too.
+              Navigator.of(context).maybePop();
+            },
             child: const Text('Go to Home to turn on sharing'),
           ),
         ],

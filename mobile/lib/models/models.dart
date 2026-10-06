@@ -430,6 +430,270 @@ class Appointment {
   );
 }
 
+/// What someone can ask for help with. The wire value is what the server stores.
+enum HelpCategory {
+  food('food', 'Food'),
+  shelter('shelter', 'A place to stay'),
+  ride('ride', 'A ride'),
+  documents('documents', 'ID or papers'),
+  clothing('clothing', 'Clothing or hygiene'),
+  health('health', 'Health'),
+  work('work', 'Work'),
+  other('other', 'Something else');
+
+  final String wireValue;
+  final String label;
+  const HelpCategory(this.wireValue, this.label);
+
+  static HelpCategory fromWire(String wire) =>
+      HelpCategory.values.firstWhere((c) => c.wireValue == wire, orElse: () => HelpCategory.other);
+}
+
+/// The appointment someone attached to a help request, so a volunteer knows
+/// where and when to take them. Nothing else about their calendar is shared.
+class HelpAppointment {
+  final String id;
+  final String title;
+  final String? location;
+  final String startsAt;
+
+  HelpAppointment({required this.id, required this.title, this.location, required this.startsAt});
+
+  DateTime get startsAtLocal => DateTime.parse(startsAt).toLocal();
+
+  factory HelpAppointment.fromJson(Map<String, dynamic> json) => HelpAppointment(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    location: json['location'] as String?,
+    startsAt: json['startsAt'] as String,
+  );
+}
+
+/// One "I need help with..." request. The same shape serves both sides: the
+/// person who asked sees status and the helper's first name; volunteers and
+/// admins also get who asked ([userId], [name]) and whether they're the helper.
+class HelpRequest {
+  final String id;
+  final HelpCategory category;
+  final String? note;
+  final String status; // open | claimed | done
+  final String createdAt;
+  final String? helperName;
+  final HelpAppointment? appointment;
+
+  // Staff view only.
+  final String? userId;
+  final String? name;
+  final bool claimedByMe;
+
+  HelpRequest({
+    required this.id,
+    required this.category,
+    this.note,
+    required this.status,
+    required this.createdAt,
+    this.helperName,
+    this.appointment,
+    this.userId,
+    this.name,
+    this.claimedByMe = false,
+  });
+
+  bool get isOpen => status == 'open';
+  bool get isClaimed => status == 'claimed';
+  bool get isDone => status == 'done';
+  DateTime get createdAtLocal => DateTime.parse(createdAt).toLocal();
+
+  factory HelpRequest.fromJson(Map<String, dynamic> json) => HelpRequest(
+    id: json['id'] as String,
+    category: HelpCategory.fromWire(json['category'] as String),
+    note: json['note'] as String?,
+    status: json['status'] as String,
+    createdAt: json['createdAt'] as String,
+    helperName: json['helperName'] as String?,
+    appointment: json['appointment'] == null ? null : HelpAppointment.fromJson(json['appointment'] as Map<String, dynamic>),
+    userId: json['userId'] as String?,
+    name: json['name'] as String?,
+    claimedByMe: json['claimedByMe'] as bool? ?? false,
+  );
+}
+
+/// Someone you can message (or have messaged), with the latest message.
+/// [role] is team (Ground to Growth staff), volunteer, or participant.
+class Conversation {
+  final String userId;
+  final String name;
+  final String role;
+  final String? lastMessage;
+  final String? lastAt;
+  final int unread;
+
+  /// False once the help that opened this chat has ended (or it was blocked
+  /// or paused): the history can still be read but nothing new can be sent.
+  final bool canSend;
+
+  Conversation({
+    required this.userId,
+    required this.name,
+    required this.role,
+    this.lastMessage,
+    this.lastAt,
+    this.unread = 0,
+    this.canSend = true,
+  });
+
+  DateTime? get lastAtLocal => lastAt == null ? null : DateTime.parse(lastAt!).toLocal();
+
+  String get roleLabel => switch (role) {
+    'team' => 'Ground to Growth team',
+    'volunteer' => 'Volunteer',
+    _ => 'Getting support',
+  };
+
+  factory Conversation.fromJson(Map<String, dynamic> json) => Conversation(
+    userId: json['userId'] as String,
+    name: json['name'] as String,
+    role: json['role'] as String,
+    lastMessage: json['lastMessage'] as String?,
+    lastAt: json['lastAt'] as String?,
+    unread: json['unread'] as int? ?? 0,
+    canSend: json['canSend'] as bool? ?? true,
+  );
+}
+
+class ChatMessage {
+  final String id;
+  final bool fromMe;
+  final String body;
+  final String createdAt;
+
+  ChatMessage({required this.id, required this.fromMe, required this.body, required this.createdAt});
+
+  DateTime get createdAtLocal => DateTime.parse(createdAt).toLocal();
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
+    id: json['id'] as String,
+    fromMe: json['fromMe'] as bool,
+    body: json['body'] as String,
+    createdAt: json['createdAt'] as String,
+  );
+}
+
+/// A person as admins see them in safety screens.
+class PersonRef {
+  final String userId;
+  final String name;
+  final String role;
+  PersonRef({required this.userId, required this.name, required this.role});
+
+  factory PersonRef.fromJson(Map<String, dynamic> json) =>
+      PersonRef(userId: json['userId'] as String, name: json['name'] as String, role: json['role'] as String? ?? 'participant');
+}
+
+/// "Report a problem", as an admin reads it.
+class SafetyReport {
+  final String id;
+  final String status; // open | resolved
+  final String createdAt;
+  final String? reason;
+  final PersonRef reporter;
+  final PersonRef subject;
+
+  SafetyReport({
+    required this.id,
+    required this.status,
+    required this.createdAt,
+    this.reason,
+    required this.reporter,
+    required this.subject,
+  });
+
+  bool get isOpen => status == 'open';
+  DateTime get createdAtLocal => DateTime.parse(createdAt).toLocal();
+
+  factory SafetyReport.fromJson(Map<String, dynamic> json) => SafetyReport(
+    id: json['id'] as String,
+    status: json['status'] as String,
+    createdAt: json['createdAt'] as String,
+    reason: json['reason'] as String?,
+    reporter: PersonRef.fromJson(json['reporter'] as Map<String, dynamic>),
+    subject: PersonRef.fromJson(json['subject'] as Map<String, dynamic>),
+  );
+}
+
+/// Who has been talking to whom — no message text until an admin opens it.
+class AdminConversation {
+  final PersonRef a;
+  final PersonRef b;
+  final int count;
+  final String lastAt;
+  final bool flagged;
+
+  AdminConversation({required this.a, required this.b, required this.count, required this.lastAt, required this.flagged});
+
+  DateTime get lastAtLocal => DateTime.parse(lastAt).toLocal();
+
+  factory AdminConversation.fromJson(Map<String, dynamic> json) => AdminConversation(
+    a: PersonRef.fromJson(json['a'] as Map<String, dynamic>),
+    b: PersonRef.fromJson(json['b'] as Map<String, dynamic>),
+    count: json['count'] as int,
+    lastAt: json['lastAt'] as String,
+    flagged: json['flagged'] as bool? ?? false,
+  );
+}
+
+class AdminMessage {
+  final String id;
+  final String senderId;
+  final String body;
+  final String createdAt;
+  AdminMessage({required this.id, required this.senderId, required this.body, required this.createdAt});
+
+  DateTime get createdAtLocal => DateTime.parse(createdAt).toLocal();
+
+  factory AdminMessage.fromJson(Map<String, dynamic> json) => AdminMessage(
+    id: json['id'] as String,
+    senderId: json['senderId'] as String,
+    body: json['body'] as String,
+    createdAt: json['createdAt'] as String,
+  );
+}
+
+class VolunteerInfo {
+  final String userId;
+  final String name;
+  final bool approved;
+  final bool paused;
+  final String createdAt;
+
+  VolunteerInfo({required this.userId, required this.name, required this.approved, required this.paused, required this.createdAt});
+
+  factory VolunteerInfo.fromJson(Map<String, dynamic> json) => VolunteerInfo(
+    userId: json['userId'] as String,
+    name: json['name'] as String,
+    approved: json['approved'] as bool,
+    paused: json['paused'] as bool? ?? false,
+    createdAt: json['createdAt'] as String,
+  );
+}
+
+class AccessLogEntry {
+  final String admin;
+  final String a;
+  final String b;
+  final String createdAt;
+  AccessLogEntry({required this.admin, required this.a, required this.b, required this.createdAt});
+
+  DateTime get createdAtLocal => DateTime.parse(createdAt).toLocal();
+
+  factory AccessLogEntry.fromJson(Map<String, dynamic> json) => AccessLogEntry(
+    admin: json['admin'] as String,
+    a: json['a'] as String,
+    b: json['b'] as String,
+    createdAt: json['createdAt'] as String,
+  );
+}
+
 /// Staff-only: which document *types* a participant has on file. Staff never
 /// see the documents themselves — only that they exist.
 class DocumentsOnFile {

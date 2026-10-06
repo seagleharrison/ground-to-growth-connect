@@ -11,14 +11,15 @@ import 'analytics_view.dart';
 import 'calendar_view.dart';
 import 'documents_view.dart';
 import 'home_view.dart';
+import 'help_board_view.dart';
 import 'map_tab_view.dart';
+import 'messages_view.dart';
 import 'resources_view.dart';
 import 'settings_view.dart';
 
-/// Participants get Home, Calendar, Documents, Resources and Me. Volunteers
-/// just get Me — the staff "everyone" Map lives inside their Settings instead
-/// of the bottom bar. Admins get the bottom-bar Map plus Analytics. The bar
-/// runs along the bottom.
+/// Participants get Home, Calendar, Documents, Resources and Me. Volunteers get
+/// Help, Messages and Me, with the staff "everyone" Map inside Settings; admins
+/// keep Map in the bar and add Analytics. The bar holds at most five icons.
 class MainTabView extends StatefulWidget {
   const MainTabView({super.key});
 
@@ -163,13 +164,25 @@ class _MainTabViewState extends State<MainTabView> {
           item: const NavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
           view: const HomeView(),
         ),
-      // Volunteers find Map inside Settings instead of the bottom bar —
-      // admin keeps it here since the staff "everyone" map is core to that role.
+      // Admins keep the staff Map in the bar; volunteers find it in Settings.
       if (isAdmin)
         (
           tab: AppTab.map,
           item: const NavItem(Icons.map_outlined, Icons.map_rounded, 'Map'),
           view: const MapTabView(),
+        ),
+      // Volunteers and admins see what people have asked for, and can step in.
+      if (isStaff)
+        (
+          tab: AppTab.help,
+          item: const NavItem(Icons.volunteer_activism_outlined, Icons.volunteer_activism_rounded, 'Help'),
+          view: const HelpBoardView(),
+        ),
+      if (isStaff)
+        (
+          tab: AppTab.messages,
+          item: const NavItem(Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Messages'),
+          view: const MessagesView(),
         ),
       if (!isStaff)
         (

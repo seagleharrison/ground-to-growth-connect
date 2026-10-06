@@ -7,8 +7,11 @@ import '../theme/app_theme.dart';
 import '../util/phone.dart';
 import '../widgets/ui.dart';
 import 'account_type_sheet.dart';
+import 'blocked_people_view.dart';
 import 'edit_profile_view.dart';
 import 'map_tab_view.dart';
+import 'my_map_tab_view.dart';
+import 'pushed_screen.dart';
 import 'profile_avatar.dart';
 
 class SettingsView extends StatefulWidget {
@@ -94,40 +97,47 @@ class _SettingsViewState extends State<SettingsView> {
             ),
           ),
           // Follows the previewed role, not just the real account, so an
-          // admin previewing as volunteer sees exactly what a volunteer sees
-          // — including how they'd actually reach the Map.
-          if (app.currentView == AppView.volunteer) ...[
-            const SizedBox(height: 12),
-            FadeSlideIn(
-              delay: const Duration(milliseconds: 130),
+          // admin previewing sees exactly what that role sees — including how
+          // they'd actually reach a Map. Admins have it in the bottom bar.
+          if (app.currentView == AppView.volunteer)
+            _mapCard(
+              key: const Key('open-staff-map'),
+              subtitle: 'See everyone sharing their location',
+              onTap: () => PushedScreen.open(context, title: 'Map', child: const MapTabView()),
+            ),
+          if (app.currentView == AppView.participant)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
               child: AppCard(
-                key: const Key('open-staff-map'),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MapTabView())),
+                key: const Key('open-blocked'),
+                onTap: () => PushedScreen.open(context, title: 'Blocked people', child: const BlockedPeopleView()),
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                child: Row(
+                child: const Row(
                   children: [
-                    const Icon(Icons.map_rounded, color: Brand.orange),
-                    const SizedBox(width: 14),
-                    const Expanded(
+                    Icon(Icons.block_rounded, color: Brand.orange),
+                    SizedBox(width: 14),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Map', style: TextStyle(fontWeight: FontWeight.w700)),
+                          Text('Blocked people', style: TextStyle(fontWeight: FontWeight.w700)),
                           SizedBox(height: 2),
-                          Text(
-                            'See everyone sharing their location',
-                            style: TextStyle(color: Colors.white54, fontSize: 13),
-                          ),
+                          Text('Anyone you\'ve stopped from messaging you', style: TextStyle(color: Colors.white54, fontSize: 13)),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                    SizedBox(width: 8),
+                    Icon(Icons.chevron_right_rounded, color: Colors.white38),
                   ],
                 ),
               ),
             ),
-          ],
+          if (app.currentView == AppView.participant)
+            _mapCard(
+              key: const Key('open-my-map'),
+              subtitle: 'Where you\'ve been, day by day',
+              onTap: () => PushedScreen.open(context, title: 'My map', child: const MyMapTabView()),
+            ),
           if (app.user!.isAdmin) ...[
             const SizedBox(height: 12),
             FadeSlideIn(
@@ -317,6 +327,36 @@ class _SettingsViewState extends State<SettingsView> {
       ),
     );
   }
+
+  Widget _mapCard({required Key key, required String subtitle, required VoidCallback onTap}) => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: FadeSlideIn(
+      delay: const Duration(milliseconds: 130),
+      child: AppCard(
+        key: key,
+        onTap: onTap,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        child: Row(
+          children: [
+            const Icon(Icons.map_rounded, color: Brand.orange),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Map', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+          ],
+        ),
+      ),
+    ),
+  );
 
   Widget _row(IconData icon, String label, String value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 10),

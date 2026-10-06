@@ -28,7 +28,7 @@ Future<AppState> _pumpApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: state),
-        ChangeNotifierProvider(create: (_) => TabNav(current: AppTab.map)),
+        ChangeNotifierProvider(create: (_) => TabNav()),
       ],
       child: const MaterialApp(home: MainTabView()),
     ),

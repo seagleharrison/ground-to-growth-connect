@@ -59,6 +59,32 @@ class FakeApi {
   final List<Map<String, dynamic>> appointments = [];
   int _nextAppointmentId = 1;
 
+  /// Help requests in the volunteer-facing shape (with userId/name); the
+  /// person's own list is these filtered to their id. Ids must look like h1.
+  final List<Map<String, dynamic>> helpRequests = [];
+  int _nextHelpId = 1;
+
+  /// Contacts for GET /api/conversations, and each person's thread.
+  final List<Map<String, dynamic>> conversations = [];
+  final Map<String, List<Map<String, dynamic>>> threads = {};
+  int _nextMessageId = 1;
+
+  /// False answers the help board and claims the way the server does for a
+  /// volunteer an admin hasn't approved yet.
+  bool volunteerApproved = true;
+
+  /// Whether each person's thread is still open for sending (default open).
+  final Map<String, bool> threadCanSend = {};
+
+  /// Safety: who this person blocked, reports, and what admins can review.
+  final List<Map<String, dynamic>> blocked = [];
+  final List<Map<String, dynamic>> reports = [];
+  final List<Map<String, dynamic>> adminConversations = [];
+  final Map<String, List<Map<String, dynamic>>> adminThreads = {};
+  final List<Map<String, dynamic>> accessLog = [];
+  final List<Map<String, dynamic>> volunteers = [];
+  bool reportAlsoBlocks = true;
+
   /// What GET /api/analytics/sources returns for an admin.
   List<Map<String, dynamic>> flaggedSources = [];
   List<Map<String, dynamic>> blockedSources = [];
@@ -178,7 +204,158 @@ class FakeApi {
       }
     }
 
+    // Help requests: /api/help-requests[/{id}[/claim|release|complete]]
+    final helpMatch = RegExp(r'^/api/help-requests/(h\d+)(?:/(claim|release|complete))?$').firstMatch(request.url.path);
+    if (helpMatch != null) {
+      final hr = helpRequests.where((h) => h['id'] == helpMatch.group(1)).firstOrNull;
+      if (hr == null) return _json({'error': 'Not found'}, status: 404);
+      final action = helpMatch.group(2);
+      if (request.method == 'DELETE') {
+        helpRequests.remove(hr);
+        return _json({'deleted': true});
+      }
+      if (action == 'claim') {
+        if (hr['status'] == 'claimed' && hr['claimedByMe'] != true) {
+          return _json({'error': 'Someone else is already helping with this.'}, status: 409);
+        }
+        hr['status'] = 'claimed';
+        hr['claimedByMe'] = true;
+        hr['helperName'] = (user['name'] as String).split(' ').first;
+      } else if (action == 'release') {
+        hr['status'] = 'open';
+        hr['claimedByMe'] = false;
+        hr['helperName'] = null;
+      } else if (action == 'complete') {
+        hr['status'] = 'done';
+      }
+      return _json({'request': hr});
+    }
+    final msgMatch = RegExp(r'^/api/messages/([\w-]+)$').firstMatch(request.url.path);
+    if (msgMatch != null) {
+      final other = msgMatch.group(1)!;
+      final thread = threads.putIfAbsent(other, () => []);
+      if (request.method == 'POST') {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final m = {
+          'id': 'm${_nextMessageId++}',
+          'fromMe': true,
+          'body': body['body'],
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+        };
+        thread.add(m);
+        for (final c in conversations) {
+          if (c['userId'] == other) {
+            c['lastMessage'] = body['body'];
+            c['lastAt'] = m['createdAt'];
+          }
+        }
+        return _json({'message': m}, status: 201);
+      }
+      for (final c in conversations) {
+        if (c['userId'] == other) c['unread'] = 0;
+      }
+      return _json({'messages': thread, 'canSend': threadCanSend[other] ?? true});
+    }
+
+    // Safety routes
+    final unblockMatch = RegExp(r'^/api/blocks/([\w-]+)$').firstMatch(request.url.path);
+    if (unblockMatch != null && request.method == 'DELETE') {
+      blocked.removeWhere((b) => b['userId'] == unblockMatch.group(1));
+      return _json({'unblocked': true});
+    }
+    final resolveMatch = RegExp(r'^/api/reports/([\w-]+)/resolve$').firstMatch(request.url.path);
+    if (resolveMatch != null && request.method == 'POST') {
+      for (final r in reports) {
+        if (r['id'] == resolveMatch.group(1)) r['status'] = 'resolved';
+      }
+      return _json({'resolved': true});
+    }
+    final adminRead = RegExp(r'^/api/admin/conversations/([\w-]+)/([\w-]+)$').firstMatch(request.url.path);
+    if (adminRead != null) {
+      final a = adminRead.group(1)!, b = adminRead.group(2)!;
+      // The real server logs ids and reports names; this fake knows a few.
+      const names = {'p1': 'Pat Morgan', 'v1': 'Sam Helper'};
+      accessLog.insert(0, {'admin': user['name'], 'a': names[a] ?? a, 'b': names[b] ?? b, 'createdAt': DateTime.now().toUtc().toIso8601String()});
+      return _json({'messages': adminThreads['$a/$b'] ?? adminThreads['$b/$a'] ?? []});
+    }
+    final volAction = RegExp(r'^/api/admin/volunteers/([\w-]+)/(approve|revoke|pause|unpause)$').firstMatch(request.url.path);
+    if (volAction != null && request.method == 'POST') {
+      for (final v in volunteers) {
+        if (v['userId'] != volAction.group(1)) continue;
+        switch (volAction.group(2)) {
+          case 'approve':
+            v['approved'] = true;
+          case 'revoke':
+            v['approved'] = false;
+          case 'pause':
+            v['paused'] = true;
+          case 'unpause':
+            v['paused'] = false;
+        }
+      }
+      return _json({'ok': true});
+    }
+
     switch (route) {
+      case 'POST /api/blocks':
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        blocked.add({'userId': body['userId'], 'name': 'Sam', 'role': 'volunteer'});
+        conversations.removeWhere((c) => c['userId'] == body['userId']);
+        return _json({'blocked': true});
+      case 'GET /api/blocks':
+        return _json({'blocked': blocked});
+      case 'POST /api/reports':
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        reports.add({
+          'id': 'r${reports.length + 1}',
+          'status': 'open',
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+          'reason': body['reason'],
+          'reporter': {'userId': user['id'], 'name': user['name'], 'role': 'participant'},
+          'subject': {'userId': body['userId'], 'name': 'Sam', 'role': 'volunteer'},
+        });
+        return _json({'reported': true, 'blocked': reportAlsoBlocks}, status: 201);
+      case 'GET /api/reports':
+        if (user['personType'] != 'admin') return _json({'error': 'Admin access required'}, status: 403);
+        return _json({'reports': reports});
+      case 'GET /api/admin/conversations':
+        return _json({'conversations': adminConversations});
+      case 'GET /api/admin/access-log':
+        return _json({'log': accessLog});
+      case 'GET /api/admin/volunteers':
+        return _json({'volunteers': volunteers});
+      case 'GET /api/conversations':
+        return _json({'conversations': conversations});
+      case 'GET /api/help-requests/mine':
+        return _json({
+          'requests': [for (final h in helpRequests) if (h['userId'] == user['id']) h].reversed.toList(),
+        });
+      case 'GET /api/help-requests':
+        if (user['personType'] == 'homeless') return _json({'error': 'Staff access required'}, status: 403);
+        if (user['personType'] == 'volunteer' && !volunteerApproved) {
+          return _json({'error': 'An admin needs to approve your volunteer account before you can do this.'}, status: 403);
+        }
+        return _json({'requests': [for (final h in helpRequests) if (h['status'] != 'done') h]});
+      case 'POST /api/help-requests':
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final appt = appointments.where((a) => a['id'] == body['appointmentId']).firstOrNull;
+        final hr = {
+          'id': 'h${_nextHelpId++}',
+          'category': body['category'],
+          'note': body['note'],
+          'status': 'open',
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+          'claimedAt': null,
+          'helperName': null,
+          'appointment': appt == null
+              ? null
+              : {'id': appt['id'], 'title': appt['title'], 'location': appt['location'], 'startsAt': appt['startsAt']},
+          'userId': user['id'],
+          'name': user['name'],
+          'claimedByMe': false,
+        };
+        helpRequests.add(hr);
+        return _json({'request': hr}, status: 201);
       case 'GET /api/me':
         return _json({'user': user});
       case 'PATCH /api/me':

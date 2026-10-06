@@ -8,6 +8,7 @@ import 'package:ground_to_growth_connect/app_state.dart';
 import 'package:ground_to_growth_connect/data/calendar_content.dart';
 import 'package:ground_to_growth_connect/models/models.dart';
 import 'package:ground_to_growth_connect/nav.dart';
+import 'package:ground_to_growth_connect/theme/app_theme.dart';
 import 'package:ground_to_growth_connect/views/main_tab_view.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -35,7 +36,7 @@ Future<AppState> _pump(WidgetTester tester, FakeApi api, {String personType = 'h
       ChangeNotifierProvider.value(value: state),
       ChangeNotifierProvider(create: (_) => TabNav(current: AppTab.calendar)),
     ],
-    child: const MaterialApp(home: MainTabView()),
+    child: MaterialApp(theme: buildAppTheme(), darkTheme: buildAppTheme(), themeMode: ThemeMode.dark, home: const MainTabView()),
   ));
   for (var i = 0; i < 6; i++) {
     await tester.pump(const Duration(milliseconds: 300));

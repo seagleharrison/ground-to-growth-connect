@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../data/calendar_content.dart';
 import '../models/models.dart';
+import '../services/help_controller.dart';
 import '../theme/app_theme.dart';
 import '../util/time.dart';
 import '../widgets/ui.dart';
@@ -15,8 +16,9 @@ class _AgendaEntry {
   final String title;
   final String? subtitle;
   final Appointment? appointment; // non-null only for a personal appointment
+  final String? helper; // first name of a volunteer taking them there
 
-  _AgendaEntry({required this.when, required this.title, this.subtitle, this.appointment});
+  _AgendaEntry({required this.when, required this.title, this.subtitle, this.appointment, this.helper});
 
   bool get isAppointment => appointment != null;
 }
@@ -41,6 +43,7 @@ class _CalendarViewState extends State<CalendarView> {
         if (mounted) calendar.refreshEvents();
       });
       calendar.refreshAppointments();
+      context.read<AppState>().help.refreshMine();
     });
   }
 
@@ -49,13 +52,13 @@ class _CalendarViewState extends State<CalendarView> {
     await Future.wait([calendar.refreshEvents(), calendar.refreshAppointments()]);
   }
 
-  List<_AgendaEntry> _upcoming(CalendarEventsContent? content, List<Appointment> appointments) {
+  List<_AgendaEntry> _upcoming(CalendarEventsContent? content, List<Appointment> appointments, HelpController help) {
     final now = DateTime.now();
     final startOfToday = DateTime(now.year, now.month, now.day);
     final entries = <_AgendaEntry>[
       for (final e in content?.events ?? const <CalendarEventInfo>[])
         _AgendaEntry(when: e.startsAtLocal, title: e.title, subtitle: e.description ?? e.location),
-      for (final a in appointments) _AgendaEntry(when: a.startsAtLocal, title: a.title, subtitle: a.location, appointment: a),
+      for (final a in appointments) _AgendaEntry(when: a.startsAtLocal, title: a.title, subtitle: a.location, appointment: a, helper: help.helperForAppointment(a.id)),
     ]..removeWhere((e) => e.when.isBefore(startOfToday));
     entries.sort((a, b) => a.when.compareTo(b.when));
     return entries;
@@ -74,7 +77,7 @@ class _CalendarViewState extends State<CalendarView> {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final calendar = app.calendar;
-    final entries = _upcoming(calendar.content, calendar.appointments);
+    final entries = _upcoming(calendar.content, calendar.appointments, app.help);
 
     final groups = <(DateTime, List<_AgendaEntry>)>[];
     for (final entry in entries) {
@@ -159,6 +162,15 @@ class _CalendarViewState extends State<CalendarView> {
                           Text(entry.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                           const SizedBox(height: 2),
                           Text(clockTime(entry.when), style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                          if (entry.helper != null) ...[
+                            const SizedBox(height: 6),
+                            Pill(
+                              key: Key('helper-${entry.appointment!.id}'),
+                              label: '${entry.helper} is taking you',
+                              color: Brand.green,
+                              icon: Icons.volunteer_activism_rounded,
+                            ),
+                          ],
                           if ((entry.subtitle ?? '').isNotEmpty) ...[
                             const SizedBox(height: 4),
                             Text(entry.subtitle!, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.3)),

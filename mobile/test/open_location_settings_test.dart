@@ -104,7 +104,7 @@ void main() {
         await tester.pumpWidget(MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: state),
-            ChangeNotifierProvider(create: (_) => TabNav(current: AppTab.map)),
+            ChangeNotifierProvider(create: (_) => TabNav()),
           ],
           child: const MaterialApp(home: MapTabView()),
         ));
@@ -138,7 +138,7 @@ void main() {
         await tester.pumpWidget(MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: state),
-            ChangeNotifierProvider(create: (_) => TabNav(current: AppTab.map)),
+            ChangeNotifierProvider(create: (_) => TabNav()),
           ],
           child: const MaterialApp(home: MapTabView()),
         ));

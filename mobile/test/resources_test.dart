@@ -288,7 +288,7 @@ void main() {
 
     for (final role in ['volunteer', 'admin']) {
       withApi('$role accounts do not get the participant Resources tab', (tester, api) async {
-        await pumpApp(tester, api, role, start: AppTab.map);
+        await pumpApp(tester, api, role, start: AppTab.me);
         expect(find.text('Resources'), findsNothing);
         expect(api.resourcesRequests, 0, reason: 'nothing asks for it');
       });

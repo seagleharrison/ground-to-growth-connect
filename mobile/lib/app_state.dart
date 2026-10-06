@@ -6,8 +6,11 @@ import 'package:flutter/services.dart';
 import 'models/models.dart';
 import 'services/api_client.dart';
 import 'services/calendar_controller.dart';
+import 'services/chat_controller.dart';
+import 'services/help_controller.dart';
 import 'services/location_tracker.dart';
 import 'services/resources_controller.dart';
+import 'services/safety_controller.dart';
 import 'services/secure_storage_service.dart';
 
 /// Direct equivalent of the native app's AppState.swift: a ChangeNotifier
@@ -22,9 +25,25 @@ class AppState extends ChangeNotifier {
   /// The Calendar tab's shelter events and the person's own appointments.
   final calendar = CalendarController();
 
+  /// Help requests: what I've asked for, and the volunteer board.
+  final help = HelpController();
+
+  /// Contacts and one-to-one chat.
+  final chat = ChatController();
+
+  /// Admin-only: volunteer approval, reports and conversation review.
+  final safety = SafetyController();
+
   AppState() {
     resources.addListener(notifyListeners);
     calendar.addListener(notifyListeners);
+    help.addListener(notifyListeners);
+    chat.addListener(notifyListeners);
+    safety.addListener(notifyListeners);
+    safety.writeBlocked = _blockedByPreview;
+    calendar.writeBlocked = _blockedByPreview;
+    help.writeBlocked = _blockedByPreview;
+    chat.writeBlocked = _blockedByPreview;
   }
 
   @override
@@ -33,6 +52,12 @@ class AppState extends ChangeNotifier {
     resources.dispose();
     calendar.removeListener(notifyListeners);
     calendar.dispose();
+    help.removeListener(notifyListeners);
+    help.dispose();
+    chat.removeListener(notifyListeners);
+    chat.dispose();
+    safety.removeListener(notifyListeners);
+    safety.dispose();
     super.dispose();
   }
 
@@ -628,6 +653,10 @@ class AppState extends ChangeNotifier {
     documentConsent = null;
     documentDisclosure = null;
     documents = [];
+    calendar.clearPrivate();
+    help.clearPrivate();
+    chat.clearPrivate();
+    safety.clearPrivate();
     isUnlocked = false;
     showWelcome = false;
     pendingRecoveryCode = null;

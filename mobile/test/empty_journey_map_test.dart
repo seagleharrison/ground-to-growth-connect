@@ -19,7 +19,7 @@ Future<void> _pump(WidgetTester tester, FakeApi api, AppState state) async {
     await tester.pumpWidget(MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: state),
-        ChangeNotifierProvider(create: (_) => TabNav(current: AppTab.map)),
+        ChangeNotifierProvider(create: (_) => TabNav()),
       ],
       child: const MaterialApp(home: MyMapTabView()),
     ));

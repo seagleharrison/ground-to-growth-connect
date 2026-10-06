@@ -19,9 +19,8 @@ Map<String, dynamic> staffLoc(String id, String name, String personType, {int mi
       'reportedAt': DateTime.now().toUtc().subtract(Duration(minutes: minsAgo)).toIso8601String(),
     };
 
-/// Ends with the staff "everyone" Map on screen either way — an admin gets
-/// there straight from the bottom bar; a volunteer no longer has a Map tab,
-/// so this follows the same path they would: Settings, then the Map card.
+/// Ends with the staff "everyone" Map on screen. An admin has it in the bottom
+/// bar; a volunteer reaches it the way they would: Settings, then the Map card.
 Future<AppState> _pump(WidgetTester tester, FakeApi api, String personType, {AppTab? start}) async {
   tester.view.physicalSize = const Size(1200, 3200);
   tester.view.devicePixelRatio = 2.0;

@@ -10,6 +10,8 @@ import '../widgets/confetti.dart';
 import '../widgets/ui.dart';
 import 'documents_view.dart' show missingCoreDocuments, walletColors, walletGreen, walletIcon;
 import 'edit_profile_view.dart';
+import 'messages_view.dart';
+import 'my_help_view.dart';
 import 'profile_avatar.dart';
 import 'sharing_sheets.dart';
 
@@ -62,6 +64,10 @@ class _HomeViewState extends State<HomeView> {
         ],
         FadeSlideIn(child: _SharingCard(app: app)),
         const SizedBox(height: 16),
+        const FadeSlideIn(delay: Duration(milliseconds: 40), child: _AskForHelpCard()),
+        const SizedBox(height: 16),
+        const HomeContactsCard(),
+        if (app.chat.conversations.isNotEmpty) const SizedBox(height: 6),
         FadeSlideIn(delay: const Duration(milliseconds: 90), child: _GettingStartedCard(app: app)),
         const SizedBox(height: 16),
         FadeSlideIn(delay: const Duration(milliseconds: 180), child: _DocumentsPeek(app: app)),
@@ -76,6 +82,37 @@ class _HomeViewState extends State<HomeView> {
         page,
         if (app.showWelcome) const Positioned.fill(child: ConfettiBurst()),
       ],
+    );
+  }
+}
+
+// MARK: - Ask for help
+
+class _AskForHelpCard extends StatelessWidget {
+  const _AskForHelpCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      key: const Key('ask-for-help-card'),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyHelpView())),
+      child: const Row(
+        children: [
+          Icon(Icons.volunteer_activism_rounded, color: Brand.orange, size: 28),
+          SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Need help with something?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                SizedBox(height: 3),
+                Text('Food, a ride, ID, a place to stay. A volunteer can step in.', style: TextStyle(color: Colors.white60, height: 1.35)),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: Colors.white38),
+        ],
+      ),
     );
   }
 }

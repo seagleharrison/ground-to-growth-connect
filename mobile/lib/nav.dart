@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-enum AppTab { home, map, calendar, documents, resources, analytics, me }
+enum AppTab { home, map, help, messages, calendar, documents, resources, analytics, me }
 
 /// Which tab is showing. Shared so any screen can send the person somewhere
 /// else in the app ("Add your documents" on Home jumps to the Documents tab).

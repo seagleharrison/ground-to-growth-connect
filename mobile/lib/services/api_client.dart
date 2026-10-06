@@ -295,6 +295,124 @@ class ApiClient {
     await _request(path: '/api/appointments/$id', method: 'DELETE');
   }
 
+  // MARK: - Help requests
+
+  Future<HelpRequest> createHelpRequest({required HelpCategory category, String? note, String? appointmentId}) async {
+    final json = await _request(
+      path: '/api/help-requests',
+      method: 'POST',
+      body: {'category': category.wireValue, 'note': ?note, 'appointmentId': ?appointmentId},
+    );
+    return HelpRequest.fromJson(json['request'] as Map<String, dynamic>);
+  }
+
+  Future<List<HelpRequest>> fetchMyHelpRequests() async {
+    final json = await _request(path: '/api/help-requests/mine');
+    return (json['requests'] as List).map((r) => HelpRequest.fromJson(r as Map<String, dynamic>)).toList();
+  }
+
+  /// Volunteers and admins: everything still open or being handled.
+  Future<List<HelpRequest>> fetchHelpBoard() async {
+    final json = await _request(path: '/api/help-requests');
+    return (json['requests'] as List).map((r) => HelpRequest.fromJson(r as Map<String, dynamic>)).toList();
+  }
+
+  Future<HelpRequest> claimHelpRequest(String id) => _helpAction(id, 'claim');
+  Future<HelpRequest> releaseHelpRequest(String id) => _helpAction(id, 'release');
+  Future<HelpRequest> completeHelpRequest(String id) => _helpAction(id, 'complete');
+
+  Future<HelpRequest> _helpAction(String id, String action) async {
+    final json = await _request(path: '/api/help-requests/$id/$action', method: 'POST');
+    return HelpRequest.fromJson(json['request'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteHelpRequest(String id) async {
+    await _request(path: '/api/help-requests/$id', method: 'DELETE');
+  }
+
+  // MARK: - Chat
+
+  Future<List<Conversation>> fetchConversations() async {
+    final json = await _request(path: '/api/conversations');
+    return (json['conversations'] as List).map((c) => Conversation.fromJson(c as Map<String, dynamic>)).toList();
+  }
+
+  /// Opening a thread also marks what they sent you as read.
+  Future<List<ChatMessage>> fetchMessages(String userId) async {
+    final json = await _request(path: '/api/messages/$userId');
+    return (json['messages'] as List).map((m) => ChatMessage.fromJson(m as Map<String, dynamic>)).toList();
+  }
+
+  Future<ChatMessage> sendMessage(String userId, String body) async {
+    final json = await _request(path: '/api/messages/$userId', method: 'POST', body: {'body': body});
+    return ChatMessage.fromJson(json['message'] as Map<String, dynamic>);
+  }
+
+  // MARK: - Safety: blocking, reporting, admin review
+
+  /// Returns the thread and whether new messages can still be sent in it.
+  Future<({List<ChatMessage> messages, bool canSend})> fetchThread(String userId) async {
+    final json = await _request(path: '/api/messages/$userId');
+    return (
+      messages: (json['messages'] as List).map((m) => ChatMessage.fromJson(m as Map<String, dynamic>)).toList(),
+      canSend: json['canSend'] as bool? ?? true,
+    );
+  }
+
+  Future<void> blockUser(String userId) async {
+    await _request(path: '/api/blocks', method: 'POST', body: {'userId': userId});
+  }
+
+  Future<List<PersonRef>> fetchBlocked() async {
+    final json = await _request(path: '/api/blocks');
+    return (json['blocked'] as List).map((p) => PersonRef.fromJson(p as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> unblockUser(String userId) async {
+    await _request(path: '/api/blocks/$userId', method: 'DELETE');
+  }
+
+  /// Returns true when reporting also blocked the person straight away.
+  Future<bool> reportUser(String userId, {String? reason}) async {
+    final json = await _request(path: '/api/reports', method: 'POST', body: {'userId': userId, 'reason': ?reason});
+    return json['blocked'] as bool? ?? false;
+  }
+
+  Future<List<SafetyReport>> fetchReports() async {
+    final json = await _request(path: '/api/reports');
+    return (json['reports'] as List).map((r) => SafetyReport.fromJson(r as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> resolveReport(String id) async {
+    await _request(path: '/api/reports/$id/resolve', method: 'POST');
+  }
+
+  Future<List<AdminConversation>> fetchAdminConversations() async {
+    final json = await _request(path: '/api/admin/conversations');
+    return (json['conversations'] as List).map((c) => AdminConversation.fromJson(c as Map<String, dynamic>)).toList();
+  }
+
+  /// Opening a conversation as an admin is logged on the server.
+  Future<List<AdminMessage>> readAdminConversation(String a, String b) async {
+    final json = await _request(path: '/api/admin/conversations/$a/$b');
+    return (json['messages'] as List).map((m) => AdminMessage.fromJson(m as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<AccessLogEntry>> fetchAccessLog() async {
+    final json = await _request(path: '/api/admin/access-log');
+    return (json['log'] as List).map((e) => AccessLogEntry.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<VolunteerInfo>> fetchVolunteers() async {
+    final json = await _request(path: '/api/admin/volunteers');
+    return (json['volunteers'] as List).map((v) => VolunteerInfo.fromJson(v as Map<String, dynamic>)).toList();
+  }
+
+  /// action: approve | revoke | pause | unpause
+  Future<void> volunteerAction(String id, String action) async {
+    await _request(path: '/api/admin/volunteers/$id/$action', method: 'POST');
+  }
+
   /// Admin only. Official pages the Resources content points to that vanished or changed.
   Future<SourceReport> fetchSourceReport() async {
     final json = await _request(path: '/api/analytics/sources');

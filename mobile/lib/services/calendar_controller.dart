@@ -9,6 +9,9 @@ import 'secure_storage_service.dart';
 /// content, same offline-cache pattern as Resources) plus the person's own
 /// private appointments (server-synced, encrypted, never visible to staff).
 class CalendarController extends ChangeNotifier {
+  /// Set by AppState: true (and tells the person why) while an admin is only
+  /// previewing, so nothing is changed from a preview.
+  bool Function()? writeBlocked;
   CalendarEventsContent? content;
   bool isRefreshingEvents = false;
   bool eventsOffline = false;
@@ -84,6 +87,13 @@ class CalendarController extends ChangeNotifier {
     if (last == null || DateTime.now().difference(last) > staleAfter) await refreshEvents();
   }
 
+  /// Called on sign-out so the next person on this phone never sees these.
+  void clearPrivate() {
+    appointments = [];
+    appointmentsError = null;
+    notifyListeners();
+  }
+
   Future<void> refreshAppointments() async {
     isLoadingAppointments = true;
     appointmentsError = null;
@@ -109,6 +119,7 @@ class CalendarController extends ChangeNotifier {
     String? location,
     required DateTime startsAt,
   }) async {
+    if (writeBlocked?.call() == true) return "Switched off while previewing.";
     try {
       final created = await ApiClient.shared.createAppointment(
         title: title,
@@ -131,6 +142,7 @@ class CalendarController extends ChangeNotifier {
     String? location,
     DateTime? startsAt,
   }) async {
+    if (writeBlocked?.call() == true) return "Switched off while previewing.";
     try {
       final updated = await ApiClient.shared.updateAppointment(
         id,
@@ -148,6 +160,7 @@ class CalendarController extends ChangeNotifier {
   }
 
   Future<String?> removeAppointment(String id) async {
+    if (writeBlocked?.call() == true) return "Switched off while previewing.";
     try {
       await ApiClient.shared.deleteAppointment(id);
       appointments = appointments.where((a) => a.id != id).toList();

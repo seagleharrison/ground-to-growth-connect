@@ -86,6 +86,8 @@ void main() {
     // Volunteers find Map inside Settings, not as its own bottom-bar tab —
     // previewing as volunteer lands here (Me) and shows the same card.
     expect(find.byKey(const Key('open-staff-map')), findsOneWidget);
+    expect(find.text('Help'), findsWidgets, reason: 'volunteers get the Help board');
+    expect(find.text('Messages'), findsWidgets);
 
     // The account itself is untouched.
     expect(state.user!.personType, 'admin');
