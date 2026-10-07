@@ -1,8 +1,11 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
 	"testing"
+
+	"ground-to-growth-connect-backend/internal/cryptox"
 )
 
 func send(t *testing.T, h http.Handler, token, toID, body string) int {
@@ -58,37 +61,75 @@ func TestParticipantCanMessageTheTeamAndTheyReply(t *testing.T) {
 	}
 }
 
-func TestVolunteerCanOnlyMessageSomeoneTheyAreHelping(t *testing.T) {
+// seedMessage writes a message straight into the database, for the chats that
+// can no longer be started (volunteer and participant) but may still exist as history.
+func seedMessage(t *testing.T, db *sql.DB, fromID, toID, text string) {
+	t.Helper()
+	enc, err := cryptox.EncryptString(&text)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO messages (sender_id, recipient_id, body_encrypted) VALUES (?, ?, ?)`, fromID, toID, enc); err != nil {
+		t.Fatalf("seed message: %v", err)
+	}
+}
+
+func TestChatOnlyRunsThroughAdmins(t *testing.T) {
 	h := newTestServer(t)
 	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
-	stranger, _ := registerUser(t, h, map[string]interface{}{"name": "Stranger"})
+	ada, adaU := newAdmin(t, h)
 
-	if code := send(t, h, sam, idOf(janeU), "hello"); code != http.StatusForbidden {
-		t.Fatalf("volunteer messaging someone they aren't helping: expected 403, got %d", code)
-	}
-	if code := send(t, h, jane, idOf(samU), "hello"); code != http.StatusForbidden {
-		t.Fatalf("participant messaging a volunteer who isn't helping: expected 403, got %d", code)
-	}
-
+	// Volunteers and participants never reach each other, even mid-request.
 	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
 	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-
-	if code := send(t, h, sam, idOf(janeU), "I'll pick you up at 9"); code != http.StatusCreated {
-		t.Fatalf("after claiming: expected 201, got %d", code)
+	if code := send(t, h, sam, idOf(janeU), "I'll pick you up at 9"); code != http.StatusForbidden {
+		t.Fatalf("volunteer to participant: expected 403, got %d", code)
 	}
-	cs := conversations(t, h, jane)
-	var sawSam bool
-	for _, c := range cs {
-		if c["name"] == "Sam" && c["role"] == "volunteer" {
-			sawSam = true
+	if code := send(t, h, jane, idOf(samU), "thanks"); code != http.StatusForbidden {
+		t.Fatalf("participant to volunteer: expected 403, got %d", code)
+	}
+
+	// Admins talk with both.
+	if code := send(t, h, jane, idOf(adaU), "hello"); code != http.StatusCreated {
+		t.Fatalf("participant to admin: expected 201, got %d", code)
+	}
+	if code := send(t, h, sam, idOf(adaU), "I'm on it"); code != http.StatusCreated {
+		t.Fatalf("volunteer to admin: expected 201, got %d", code)
+	}
+	if code := send(t, h, ada, idOf(samU), "Thanks Sam"); code != http.StatusCreated {
+		t.Fatalf("admin to volunteer: expected 201, got %d", code)
+	}
+	if code := send(t, h, ada, idOf(janeU), "On it!"); code != http.StatusCreated {
+		t.Fatalf("admin to participant: expected 201, got %d", code)
+	}
+
+	// Each person's list is just the team, or for the admin, the people they serve.
+	for _, c := range conversations(t, h, sam) {
+		if c["role"] != "team" {
+			t.Fatalf("a volunteer should only see the team, got %v", c)
 		}
 	}
-	if !sawSam {
-		t.Fatalf("Jane should now see Sam (first name) as a contact, got %v", cs)
+	for _, c := range conversations(t, h, jane) {
+		if c["role"] != "team" {
+			t.Fatalf("a participant should only see the team, got %v", c)
+		}
 	}
-	if code := send(t, h, stranger, idOf(samU), "hi"); code != http.StatusForbidden {
-		t.Fatalf("an unrelated participant must not reach Sam, got %d", code)
+	roles := map[string]bool{}
+	for _, c := range conversations(t, h, ada) {
+		roles[c["role"].(string)] = true
+	}
+	if !roles["volunteer"] || !roles["participant"] {
+		t.Fatalf("an admin should see both volunteers and participants, got %v", roles)
+	}
+}
+
+func TestAVolunteerNotYetApprovedCannotChat(t *testing.T) {
+	h := newTestServer(t)
+	pending, _ := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode, "_unapproved": true})
+	_, adaU := newAdmin(t, h)
+	if code := send(t, h, pending, idOf(adaU), "hi"); code != http.StatusForbidden {
+		t.Fatalf("unapproved volunteer: expected 403, got %d", code)
 	}
 }
 
@@ -135,13 +176,19 @@ func TestMessagesAreEncryptedAndValidated(t *testing.T) {
 	}
 }
 
-func TestStaffCannotMessageEachOtherOrThemselves(t *testing.T) {
+func TestVolunteersCannotMessageEachOtherAndNobodyMessagesThemselves(t *testing.T) {
 	h := newTestServer(t)
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
-	_, adaU := registerUser(t, h, map[string]interface{}{"name": "Ada", "personType": "admin", "staffCode": testStaffCode})
-	if code := send(t, h, sam, idOf(adaU), "hi"); code != http.StatusForbidden {
-		t.Fatalf("staff to staff: expected 403, got %d", code)
+	_, patU := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode})
+	ada, adaU := newAdmin(t, h)
+	_, benU := newAdmin(t, h)
+	if code := send(t, h, sam, idOf(patU), "hi"); code != http.StatusForbidden {
+		t.Fatalf("volunteer to volunteer: expected 403, got %d", code)
 	}
+	if code := send(t, h, ada, idOf(benU), "hi"); code != http.StatusForbidden {
+		t.Fatalf("admin to admin: expected 403, got %d", code)
+	}
+	_ = adaU
 	if code := send(t, h, sam, idOf(samU), "hi"); code != http.StatusForbidden {
 		t.Fatalf("to self: expected 403, got %d", code)
 	}

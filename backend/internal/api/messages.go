@@ -64,35 +64,29 @@ func (s *Server) hasThread(a, b string) (bool, error) {
 	return n > 0, err
 }
 
-// canMessage says whether two people may chat right now. A participant can
-// reach the Ground to Growth team (admins), and an approved volunteer only
-// while that volunteer is actively helping them. When the help ends the chat
-// closes: nobody keeps a private line to someone they're no longer helping.
-// Blocks and an admin switching someone's messaging off always win.
+// canMessage says whether two people may chat right now. Chat only runs
+// through Ground to Growth admins: an admin can talk with any participant and
+// with any approved volunteer, and nobody else can talk to each other, so
+// volunteers and participants never have a private line between them. Blocks
+// and an admin switching someone's messaging off always win.
 func (s *Server) canMessage(a, b *personRef) (bool, error) {
-	if a.ID == b.ID || a.Disabled || b.Disabled || isStaff(a.Type) == isStaff(b.Type) {
+	if a.ID == b.ID || a.Disabled || b.Disabled {
 		return false, nil
 	}
-	staff, participant := a, b
-	if isStaff(b.Type) {
-		staff, participant = b, a
+	if (a.Type == "admin") == (b.Type == "admin") {
+		return false, nil
 	}
-	if !staff.Approved {
+	other := a
+	if a.Type == "admin" {
+		other = b
+	}
+	if other.Type == "volunteer" && !other.Approved {
 		return false, nil
 	}
 	if blocked, err := s.isBlocked(a.ID, b.ID); err != nil || blocked {
 		return false, err
 	}
-	if staff.Type == "admin" {
-		return true, nil
-	}
-	var active int
-	if err := s.db.QueryRow(
-		`SELECT COUNT(*) FROM help_requests WHERE user_id = ? AND claimed_by = ? AND status = 'claimed'`, participant.ID, staff.ID,
-	).Scan(&active); err != nil {
-		return false, err
-	}
-	return active > 0, nil
+	return true, nil
 }
 
 type conversationJSON struct {
@@ -154,15 +148,14 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	switch {
-	case !viewerStaff:
-		err = collect(`SELECT id FROM users WHERE person_type = 'admin'`)
-		if err == nil {
-			err = collect(`SELECT DISTINCT claimed_by FROM help_requests WHERE user_id = ? AND status = 'claimed' AND claimed_by IS NOT NULL`, v.ID)
-		}
 	case v.PersonType == "admin":
 		err = collect(`SELECT DISTINCT user_id FROM help_requests WHERE status != 'done'`)
+		if err == nil {
+			err = collect(`SELECT id FROM users WHERE person_type = 'volunteer' AND volunteer_approved = 1`)
+		}
 	default:
-		err = collect(`SELECT DISTINCT user_id FROM help_requests WHERE claimed_by = ? AND status = 'claimed'`, v.ID)
+		// Participants and volunteers both reach the team.
+		err = collect(`SELECT id FROM users WHERE person_type = 'admin'`)
 	}
 	if err == nil {
 		err = collect(`SELECT DISTINCT CASE WHEN sender_id = ?1 THEN recipient_id ELSE sender_id END FROM messages WHERE sender_id = ?1 OR recipient_id = ?1`, v.ID)
@@ -180,7 +173,7 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, err)
 			return
 		}
-		if other == nil || isStaff(other.Type) == viewerStaff {
+		if other == nil {
 			continue
 		}
 		c := conversationJSON{UserID: id, Name: displayName(viewerStaff, other), Role: roleFor(viewerStaff, other)}
@@ -289,7 +282,7 @@ func (s *Server) allowedWith(w http.ResponseWriter, v *authUser, otherID string,
 		writeError(w, http.StatusForbidden, "Messaging is switched off for your account. Please contact Ground to Growth.")
 		return nil, false, false
 	}
-	writeError(w, http.StatusForbidden, "This chat is closed. Chats are only open while someone is helping you.")
+	writeError(w, http.StatusForbidden, "This chat is closed. Chats are only with Ground to Growth admins.")
 	return nil, false, false
 }
 

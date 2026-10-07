@@ -127,6 +127,17 @@ void main() {
       expect(find.textContaining('Private thing'), findsNothing, reason: 'unattached appointments are never part of the request');
     });
 
+    _withApi('while a volunteer is on the request, the person is offered the team to message, not the volunteer', (tester, api) async {
+      api.conversations.add({'userId': 't1', 'name': 'Ada', 'role': 'team', 'lastMessage': null, 'lastAt': null, 'unread': 0});
+      api.helpRequests.add(_request('h1', status: 'claimed', mine: true, userId: 'u1', name: 'Jane Doe', helper: 'Sam'));
+      await _pump(tester, api);
+      await tester.tap(find.byKey(const Key('ask-for-help-card')));
+      await _settle(tester);
+      expect(find.text('Sam is helping'), findsOneWidget);
+      expect(find.text('Message the team'), findsOneWidget);
+      expect(find.text('Message Sam'), findsNothing);
+    });
+
     _withApi('when a volunteer takes it, the person sees who is helping, and the Calendar says so', (tester, api) async {
       final soon = DateTime.now().add(const Duration(hours: 5));
       final appt = {'id': 'a1', 'title': 'DDS visit', 'notes': null, 'location': 'DDS', 'startsAt': soon.toUtc().toIso8601String(), 'createdAt': '2026-10-01T00:00:00Z'};
@@ -246,7 +257,6 @@ void main() {
       await tester.tap(find.byKey(const Key('claim-h1')));
       await _settle(tester);
       expect(find.text("You're on it"), findsOneWidget);
-      expect(find.byKey(const Key('message-h1')), findsOneWidget);
       expect(api.helpRequests.single['status'], 'claimed');
       expect(find.byKey(const Key('claim-h1')), findsNothing);
     });
@@ -279,24 +289,33 @@ void main() {
       expect(find.byKey(const Key('board-empty')), findsOneWidget);
     });
 
-    _withApi('Message opens a chat with the person they are helping', (tester, api) async {
+    _withApi('"Message the team" opens a chat with an admin, never with the person they are helping', (tester, api) async {
+      api.conversations.add({'userId': 't1', 'name': 'Ada', 'role': 'team', 'lastMessage': null, 'lastAt': null, 'unread': 0});
       api.helpRequests.add(_request('h1', status: 'claimed', mine: true, helper: 'Sam'));
       await _pump(tester, api, personType: 'volunteer', name: 'Sam Helper', start: AppTab.help);
+      expect(find.text('Message the team'), findsOneWidget);
+      expect(find.text('Message Pat Participant'), findsNothing);
       await tester.tap(find.byKey(const Key('message-h1')));
       await _settle(tester);
-      expect(find.text('Pat Participant'), findsWidgets);
-      expect(find.text('Getting support'), findsOneWidget);
+      expect(find.text('Ada'), findsWidgets);
       await tester.enterText(find.byKey(const Key('chat-input')), 'On my way');
       await tester.tap(find.byKey(const Key('chat-send')));
       await _settle(tester);
       expect(find.text('On my way'), findsOneWidget);
-      expect(api.routes, contains('POST /api/messages/p1'));
+      expect(api.routes, contains('POST /api/messages/t1'));
+      expect(api.routes, isNot(contains('POST /api/messages/p1')));
     });
 
-    _withApi('the Messages tab lists the people they can message', (tester, api) async {
-      api.conversations.add({'userId': 'p1', 'name': 'Pat Participant', 'role': 'participant', 'lastMessage': null, 'lastAt': null, 'unread': 0});
+    _withApi('with no team contact loaded there is no message button, and never one to the person', (tester, api) async {
+      api.helpRequests.add(_request('h1', status: 'claimed', mine: true, helper: 'Sam'));
+      await _pump(tester, api, personType: 'volunteer', name: 'Sam Helper', start: AppTab.help);
+      expect(find.byKey(const Key('message-h1')), findsNothing);
+    });
+
+    _withApi('the Messages tab lists the team to message', (tester, api) async {
+      api.conversations.add({'userId': 't1', 'name': 'Ada', 'role': 'team', 'lastMessage': null, 'lastAt': null, 'unread': 0});
       await _pump(tester, api, personType: 'volunteer', name: 'Sam Helper', start: AppTab.messages);
-      expect(find.byKey(const Key('contact-p1')), findsOneWidget);
+      expect(find.byKey(const Key('contact-t1')), findsOneWidget);
     });
   });
 
@@ -306,6 +325,18 @@ void main() {
       for (final label in ['Map', 'Help', 'Messages', 'Analytics', 'Me']) {
         expect(find.text(label), findsWidgets, reason: label);
       }
+    });
+
+    _withApi('can message the person who asked, right from the board', (tester, api) async {
+      api.helpRequests.add(_request('h1'));
+      await _pump(tester, api, personType: 'admin', name: 'Ada Admin', start: AppTab.help);
+      expect(find.text('Message Pat Participant'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('message-h1')));
+      await _settle(tester);
+      await tester.enterText(find.byKey(const Key('chat-input')), 'Hi Pat, a volunteer is on the way');
+      await tester.tap(find.byKey(const Key('chat-send')));
+      await _settle(tester);
+      expect(api.routes, contains('POST /api/messages/p1'));
     });
 
     _withApi('can free up a request someone else took', (tester, api) async {

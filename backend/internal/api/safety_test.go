@@ -88,23 +88,17 @@ func TestSwitchingToVolunteerStartsUnapprovedAndLeavingStaffReleasesRequests(t *
 	}
 }
 
-func TestChatClosesWhenTheHelpEnds(t *testing.T) {
-	h := newTestServer(t)
+func TestOldVolunteerChatsStayReadableButClosed(t *testing.T) {
+	h, db := setupTestServer(t)
 	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-	if code := send(t, h, sam, idOf(janeU), "On my way"); code != http.StatusCreated {
-		t.Fatalf("while helping: expected 201, got %d", code)
-	}
-
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/complete", jane, nil)
+	seedMessage(t, db, idOf(samU), idOf(janeU), "On my way")
 
 	if code := send(t, h, sam, idOf(janeU), "Hey, can we talk?"); code != http.StatusForbidden {
-		t.Fatalf("volunteer after the help ended: expected 403, got %d", code)
+		t.Fatalf("volunteer to participant: expected 403, got %d", code)
 	}
 	if code := send(t, h, jane, idOf(samU), "thanks"); code != http.StatusForbidden {
-		t.Fatalf("participant after the help ended: expected 403, got %d", code)
+		t.Fatalf("participant to volunteer: expected 403, got %d", code)
 	}
 	// The history is still there to read, marked closed.
 	var thread map[string]interface{}
@@ -116,12 +110,6 @@ func TestChatClosesWhenTheHelpEnds(t *testing.T) {
 		if c["userId"] == idOf(janeU) && c["canSend"] != false {
 			t.Fatalf("the volunteer's list should show the chat as closed")
 		}
-	}
-	// A brand-new request from the same person does not reopen it for a volunteer who didn't take it.
-	pat, _ := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode})
-	createHelp(t, h, jane, map[string]interface{}{"category": "food"})
-	if code := send(t, h, pat, idOf(janeU), "hi"); code != http.StatusForbidden {
-		t.Fatalf("a volunteer who hasn't taken a request can't message: got %d", code)
 	}
 }
 
@@ -252,14 +240,14 @@ func TestReportValidation(t *testing.T) {
 }
 
 func TestAdminCanReviewConversationsAndEveryLookIsLogged(t *testing.T) {
-	h := newTestServer(t)
+	h, db := setupTestServer(t)
 	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	ada, _ := newAdmin(t, h)
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
 	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
 	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-	send(t, h, sam, idOf(janeU), "I'll pick you up at nine")
-	send(t, h, jane, idOf(samU), "Thank you")
+	seedMessage(t, db, idOf(samU), idOf(janeU), "I'll pick you up at nine")
+	seedMessage(t, db, idOf(janeU), idOf(samU), "Thank you")
 
 	// The overview shows who is talking, but not what is said.
 	rec := doRequest(t, h, http.MethodGet, "/api/admin/conversations", ada, nil)
@@ -303,13 +291,13 @@ func TestAdminCanReviewConversationsAndEveryLookIsLogged(t *testing.T) {
 }
 
 func TestAConversationWithAnOpenReportIsFlagged(t *testing.T) {
-	h := newTestServer(t)
+	h, db := setupTestServer(t)
 	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	ada, _ := newAdmin(t, h)
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
 	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
 	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-	send(t, h, sam, idOf(janeU), "hello")
+	seedMessage(t, db, idOf(samU), idOf(janeU), "hello")
 	doRequest(t, h, http.MethodPost, "/api/reports", jane, map[string]interface{}{"userId": idOf(samU)})
 
 	var overview map[string]interface{}

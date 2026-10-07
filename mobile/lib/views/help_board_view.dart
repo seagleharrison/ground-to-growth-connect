@@ -14,7 +14,7 @@ import 'notifications_card.dart';
 
 /// Help tab for volunteers and admins: what people have asked for, so they
 /// can see what's needed and step in. Taking one on tells the person someone
-/// is helping, and opens the way to message them.
+/// is helping, and opens the way to message the team about it.
 class HelpBoardView extends StatefulWidget {
   const HelpBoardView({super.key});
 
@@ -57,6 +57,7 @@ class _HelpBoardViewState extends State<HelpBoardView> {
     final app = context.watch<AppState>();
     final help = app.help;
     final isAdmin = app.user?.isAdmin == true;
+    final team = app.chat.conversations.where((c) => c.role == 'team').firstOrNull;
 
     return LargeTitlePage(
       title: 'Help',
@@ -110,10 +111,16 @@ class _HelpBoardViewState extends State<HelpBoardView> {
               onClaim: () => _run(() => help.claim(r.id)),
               onRelease: () => _run(() => help.release(r.id)),
               onFinish: () => _run(() => help.finish(r.id)),
-              onMessage: () => openChat(
-                context,
-                Conversation(userId: r.userId!, name: r.name ?? 'Message', role: 'participant'),
-              ),
+              // Chat only runs through admins: an admin writes to the person,
+              // a volunteer writes to the team.
+              onMessage: () {
+                if (isAdmin) {
+                  openChat(context, Conversation(userId: r.userId!, name: r.name ?? 'Message', role: 'participant'));
+                } else if (team != null) {
+                  openChat(context, team);
+                }
+              },
+              canMessage: isAdmin ? r.userId != null : (r.claimedByMe && team != null),
             ),
           ),
       ],
@@ -128,6 +135,7 @@ class _BoardCard extends StatelessWidget {
   final VoidCallback onRelease;
   final VoidCallback onFinish;
   final VoidCallback onMessage;
+  final bool canMessage;
 
   const _BoardCard({
     required this.request,
@@ -136,6 +144,7 @@ class _BoardCard extends StatelessWidget {
     required this.onRelease,
     required this.onFinish,
     required this.onMessage,
+    required this.canMessage,
   });
 
   @override
@@ -214,13 +223,14 @@ class _BoardCard extends StatelessWidget {
                   icon: const Icon(Icons.volunteer_activism_rounded, size: 18),
                   label: const Text('I can help'),
                 ),
-              if (mine) ...[
+              if (canMessage)
                 FilledButton.icon(style: compactFilled, 
                   key: Key('message-${r.id}'),
                   onPressed: onMessage,
                   icon: const Icon(Icons.chat_bubble_rounded, size: 18),
-                  label: const Text('Message'),
+                  label: Text(isAdmin ? 'Message ${r.name ?? 'them'}' : 'Message the team'),
                 ),
+              if (mine) ...[
                 OutlinedButton(style: compactOutlined, key: Key('finish-${r.id}'), onPressed: onFinish, child: const Text('Done')),
                 OutlinedButton(style: compactOutlined, key: Key('release-${r.id}'), onPressed: onRelease, child: const Text("Can't anymore")),
               ],

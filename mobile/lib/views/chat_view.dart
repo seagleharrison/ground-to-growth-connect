@@ -206,9 +206,7 @@ class _ChatViewState extends State<ChatView> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(color: Brand.surface, borderRadius: BorderRadius.circular(16)),
                 child: Text(
-                  app.user?.isStaff == true
-                      ? "This chat is closed because you're no longer helping this person."
-                      : 'This chat is closed because the help has ended. You can ask for help again, or message the Ground to Growth team any time.',
+                  'This chat is closed. Chat is only with Ground to Growth admins.',
                   style: const TextStyle(color: Colors.white60, height: 1.4),
                 ),
               ),

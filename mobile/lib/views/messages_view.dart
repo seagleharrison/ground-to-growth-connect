@@ -164,10 +164,10 @@ class _MessagesViewState extends State<MessagesView> with ConversationPolling {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('No one to message yet', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                Text('No messages yet', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                 SizedBox(height: 6),
                 Text(
-                  'When you take on a request on the Help tab, that person shows up here so you can message them.',
+                  'Ground to Growth admins show up here. Chat runs through the team, so you can message them about anything you\'re helping with.',
                   style: TextStyle(color: Colors.white70, height: 1.4),
                 ),
               ],

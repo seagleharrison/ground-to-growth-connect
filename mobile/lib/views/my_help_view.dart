@@ -71,12 +71,12 @@ class _MyHelpViewState extends State<MyHelpView> {
               request: r,
               onDone: () => _run(() => help.markDone(r.id)),
               onCancel: () => _run(() => help.cancel(r.id)),
-              onMessageHelper: () {
-                final match = app.chat.conversations.where((c) => c.role == 'volunteer' && c.name == r.helperName);
-                if (match.isNotEmpty) openChat(context, match.first);
+              // Chat runs through the Ground to Growth team, never straight to a volunteer.
+              onMessageTeam: () {
+                final team = app.chat.conversations.where((c) => c.role == 'team');
+                if (team.isNotEmpty) openChat(context, team.first);
               },
-              canMessageHelper: r.helperName != null &&
-                  app.chat.conversations.any((c) => c.role == 'volunteer' && c.name == r.helperName),
+              canMessageTeam: app.chat.conversations.any((c) => c.role == 'team'),
             ),
           ),
       ],
@@ -88,15 +88,15 @@ class _MyRequestCard extends StatelessWidget {
   final HelpRequest request;
   final VoidCallback onDone;
   final VoidCallback onCancel;
-  final VoidCallback onMessageHelper;
-  final bool canMessageHelper;
+  final VoidCallback onMessageTeam;
+  final bool canMessageTeam;
 
   const _MyRequestCard({
     required this.request,
     required this.onDone,
     required this.onCancel,
-    required this.onMessageHelper,
-    required this.canMessageHelper,
+    required this.onMessageTeam,
+    required this.canMessageTeam,
   });
 
   @override
@@ -146,12 +146,12 @@ class _MyRequestCard extends StatelessWidget {
               spacing: 10,
               runSpacing: 8,
               children: [
-                if (canMessageHelper)
+                if (canMessageTeam)
                   FilledButton.icon(style: compactFilled, 
-                    key: Key('message-helper-${r.id}'),
-                    onPressed: onMessageHelper,
+                    key: Key('message-team-${r.id}'),
+                    onPressed: onMessageTeam,
                     icon: const Icon(Icons.chat_bubble_rounded, size: 18),
-                    label: Text('Message ${r.helperName}'),
+                    label: const Text('Message the team'),
                   ),
                 OutlinedButton(style: compactOutlined, key: Key('all-set-${r.id}'), onPressed: onDone, child: const Text("I'm all set")),
                 TextButton(key: Key('cancel-${r.id}'), onPressed: onCancel, child: const Text('Cancel request')),
