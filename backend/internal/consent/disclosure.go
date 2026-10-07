@@ -50,7 +50,7 @@ WHAT WE DO NOT COLLECT
 HOW WE PROTECT YOUR INFORMATION
 • Your coordinates are encrypted (AES-256-GCM) before they are saved.
 • Access requires your personal account token.
-• Only authorized Ground to Growth outreach staff can view participant locations.
+• Only Ground to Growth administrators can view participant locations. Volunteers cannot.
 
 YOUR RIGHTS
 • You must opt in before any location is collected.

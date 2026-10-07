@@ -355,10 +355,17 @@ func TestStaffSeesLatestConsentedLocation(t *testing.T) {
 		t.Fatalf("submitting location: expected 201, got %d", rec.Code)
 	}
 
-	staffToken, _ := registerUser(t, h, map[string]interface{}{
+	volunteerToken, _ := registerUser(t, h, map[string]interface{}{
 		"name": "Outreach Sam", "personType": "volunteer", "staffCode": testStaffCode,
 	})
+	// Volunteers never see where people are; only admins do.
+	if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", volunteerToken, nil).Code; code != http.StatusForbidden {
+		t.Fatalf("a volunteer must not see other people's locations, got %d", code)
+	}
 
+	staffToken, _ := registerUser(t, h, map[string]interface{}{
+		"name": "Ada Admin", "personType": "admin", "staffCode": testStaffCode,
+	})
 	rec = doRequest(t, h, http.MethodGet, "/api/locations/latest", staffToken, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -384,7 +391,7 @@ func TestStaffDoesNotSeeLocationWithoutConsent(t *testing.T) {
 	registerUser(t, h, map[string]interface{}{"name": "No Consent Person"})
 
 	staffToken, _ := registerUser(t, h, map[string]interface{}{
-		"name": "Outreach Sam", "personType": "volunteer", "staffCode": testStaffCode,
+		"name": "Ada Admin", "personType": "admin", "staffCode": testStaffCode,
 	})
 
 	rec := doRequest(t, h, http.MethodGet, "/api/locations/latest", staffToken, nil)
@@ -430,7 +437,7 @@ func TestStaffCanShareAndOtherStaffSeeThem(t *testing.T) {
 func TestSharingStaffSeeThemselvesInTheList(t *testing.T) {
 	h := newTestServer(t)
 
-	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Outreach Sam", "personType": "volunteer", "staffCode": testStaffCode})
+	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Outreach Sam", "personType": "admin", "staffCode": testStaffCode})
 	doRequest(t, h, http.MethodPost, "/api/consent", sam, map[string]interface{}{"granted": true})
 	doRequest(t, h, http.MethodPost, "/api/locations", sam, map[string]interface{}{"latitude": 32.08, "longitude": -81.09})
 
@@ -458,5 +465,26 @@ func TestParticipantsCannotBeReachedByStaffLocationSharing(t *testing.T) {
 	participant, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", participant, nil).Code; code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", code)
+	}
+}
+
+func TestAVolunteersSharedLocationIsVisibleToAdminsOnly(t *testing.T) {
+	h := newTestServer(t)
+	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Outreach Sam", "personType": "volunteer", "staffCode": testStaffCode})
+	pat, _ := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode})
+	ada, _ := registerUser(t, h, map[string]interface{}{"name": "Ada Admin", "personType": "admin", "staffCode": testStaffCode})
+	doRequest(t, h, http.MethodPost, "/api/consent", sam, map[string]interface{}{"granted": true})
+	doRequest(t, h, http.MethodPost, "/api/locations", sam, map[string]interface{}{"latitude": 32.08, "longitude": -81.09})
+
+	for _, who := range []string{sam, pat} {
+		if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", who, nil).Code; code != http.StatusForbidden {
+			t.Fatalf("a volunteer must never see locations, got %d", code)
+		}
+	}
+	var body map[string]interface{}
+	decodeJSON(t, doRequest(t, h, http.MethodGet, "/api/locations/latest", ada, nil), &body)
+	locations := body["locations"].([]interface{})
+	if len(locations) != 1 || locations[0].(map[string]interface{})["userId"] != idOf(samU) {
+		t.Fatalf("the admin should see the volunteer who chose to share, got %v", locations)
 	}
 }
