@@ -48,8 +48,14 @@ import UserNotifications
 
     case "setBadge":
       let count = (call.arguments as? [String: Any])?["count"] as? Int ?? 0
-      UNUserNotificationCenter.current().setBadgeCount(count) { _ in }
-      result(nil)
+      DispatchQueue.main.async {
+        if #available(iOS 16.0, *) {
+          UNUserNotificationCenter.current().setBadgeCount(count) { _ in }
+        } else {
+          UIApplication.shared.applicationIconBadgeNumber = count
+        }
+        result(nil)
+      }
 
     case "takeLaunchTap":
       dartIsListening = true
