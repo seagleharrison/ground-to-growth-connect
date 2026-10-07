@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ground_to_growth_connect/app_state.dart';
@@ -49,6 +50,14 @@ Future<void> _pick(WidgetTester tester, AppView v) async {
 }
 
 void main() {
+  // A phone that has notifications switched off, so push startup answers at once.
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('g2g/push'),
+      (call) async => call.method == 'register' ? {'status': 'denied'} : null,
+    );
+  });
+
   _withApi('an admin sees the view switcher in Me, starting on Admin', (tester, api) async {
     final state = await _pump(tester, api, 'admin');
     expect(find.byKey(const Key('view-as-card')), findsOneWidget);
@@ -83,9 +92,11 @@ void main() {
     expect(find.text('Analytics'), findsNothing, reason: 'volunteers have no Analytics');
     expect(find.text('Home'), findsNothing);
     expect(find.text('Documents'), findsNothing);
-    // Volunteers find Map inside Settings, not as its own bottom-bar tab —
-    // previewing as volunteer lands here (Me) and shows the same card.
-    expect(find.byKey(const Key('open-staff-map')), findsOneWidget);
+    // Volunteers never see where people are: no Map anywhere, just a switch
+    // to let admins see them.
+    expect(find.byKey(const Key('open-staff-map')), findsNothing);
+    expect(find.text('Map'), findsNothing);
+    expect(find.byKey(const Key('volunteer-share-card')), findsOneWidget);
     expect(find.text('Help'), findsWidgets, reason: 'volunteers get the Help board');
     expect(find.text('Messages'), findsWidgets);
 

@@ -19,8 +19,9 @@ Map<String, dynamic> staffLoc(String id, String name, String personType, {int mi
       'reportedAt': DateTime.now().toUtc().subtract(Duration(minutes: minsAgo)).toIso8601String(),
     };
 
-/// Ends with the staff "everyone" Map on screen. An admin has it in the bottom
-/// bar; a volunteer reaches it the way they would: Settings, then the Map card.
+/// An admin starts on the staff "everyone" Map; a volunteer has no map at all
+/// (only admins see where people are) and starts on Me, where their own
+/// sharing switch lives.
 Future<AppState> _pump(WidgetTester tester, FakeApi api, String personType, {AppTab? start}) async {
   tester.view.physicalSize = const Size(1200, 3200);
   tester.view.devicePixelRatio = 2.0;
@@ -42,12 +43,6 @@ Future<AppState> _pump(WidgetTester tester, FakeApi api, String personType, {App
   ));
   for (var i = 0; i < 4; i++) {
     await tester.pump(const Duration(milliseconds: 300));
-  }
-  if (start == null && personType == 'volunteer') {
-    await tester.tap(find.byKey(const Key('open-staff-map')));
-    for (var i = 0; i < 4; i++) {
-      await tester.pump(const Duration(milliseconds: 300));
-    }
   }
   return state;
 }
@@ -76,23 +71,21 @@ void main() {
     expect(UserLocation.fromJson(staffLoc('x', 'X', 'homeless')).isStaffPerson, isFalse);
   });
 
-  for (final role in ['volunteer', 'admin']) {
-    _withApi('$role accounts get a Share my location chip on the staff map, off by default', (tester, api) async {
-      await _pump(tester, api, role);
-      expect(find.byKey(const Key('share-my-location-chip')), findsOneWidget);
-      expect(find.text('Share my location'), findsOneWidget);
-      expect(find.text('Sharing'), findsNothing);
-    });
-  }
+  _withApi('an admin gets a Share my location chip on the staff map, off by default', (tester, api) async {
+    await _pump(tester, api, 'admin');
+    expect(find.byKey(const Key('share-my-location-chip')), findsOneWidget);
+    expect(find.text('Share my location'), findsOneWidget);
+    expect(find.text('Sharing'), findsNothing);
+  });
 
-  _withApi('turning it on opens the staff-worded consent sheet; accepting turns sharing on', (tester, api) async {
-    await _pump(tester, api, 'volunteer');
+  _withApi('turning it on opens the admin-worded consent sheet; accepting turns sharing on', (tester, api) async {
+    await _pump(tester, api, 'admin');
 
     await tester.tap(find.byKey(const Key('share-my-location-chip')));
     await _settle(tester);
 
-    expect(find.text('Share your location with staff?'), findsOneWidget);
-    expect(find.textContaining('People we support never see this'), findsOneWidget);
+    expect(find.text('Share your location with admins?'), findsOneWidget);
+    expect(find.textContaining('never see this'), findsOneWidget);
 
     await tester.tap(find.text('I understand — turn on sharing'));
     await _settle(tester);
@@ -101,6 +94,50 @@ void main() {
     expect(find.text('Share my location'), findsNothing);
     expect(api.locationConsentGranted, isTrue);
     expect(api.routes, contains('POST /api/consent'));
+  });
+
+  group('a volunteer', () {
+    _withApi('has no map: no Map card, no Map tab, no way to see where anyone is', (tester, api) async {
+      await _pump(tester, api, 'volunteer');
+      expect(find.byKey(const Key('open-staff-map')), findsNothing);
+      expect(find.byKey(const Key('share-my-location-chip')), findsNothing);
+      expect(find.text('Map'), findsNothing);
+      expect(find.byKey(const Key('volunteer-share-card')), findsOneWidget);
+    });
+
+    _withApi('can let admins see them, and turn it off again', (tester, api) async {
+      await _pump(tester, api, 'volunteer');
+      final switchFinder = find.byKey(const Key('volunteer-share-switch'));
+      expect(tester.widget<Switch>(switchFinder).value, isFalse, reason: 'off unless they turn it on');
+
+      await tester.tap(switchFinder);
+      await _settle(tester);
+      expect(find.text('Share your location with admins?'), findsOneWidget);
+      await tester.tap(find.text('I understand — turn on sharing'));
+      await _settle(tester);
+      expect(api.locationConsentGranted, isTrue);
+      expect(tester.widget<Switch>(switchFinder).value, isTrue);
+      // The sheet stays up in this test (closing waits on the phone's real
+      // location services, which don't exist here); dismiss it as a person would.
+      await tester.tapAt(const Offset(10, 10));
+      await _settle(tester);
+
+      await tester.tap(switchFinder);
+      await _settle(tester);
+      expect(api.locationConsentGranted, isFalse);
+      expect(tester.widget<Switch>(switchFinder).value, isFalse);
+    });
+
+    _withApi('a volunteer who was already sharing can still switch it off', (tester, api) async {
+      api.locationConsentGranted = true;
+      final state = await _pump(tester, api, 'volunteer');
+      state.consent = ConsentStatus(granted: true);
+      state.notifyListeners();
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('volunteer-share-switch')));
+      await _settle(tester);
+      expect(api.locationConsentGranted, isFalse);
+    });
   });
 
   _withApi('tapping it while sharing turns it off right away, no sheet', (tester, api) async {
@@ -146,16 +183,14 @@ void main() {
     expect(youPillsOnOther, findsNothing);
   });
 
-  _withApi('an admin previewing as another role cannot turn on sharing without exiting the preview', (tester, api) async {
+  _withApi('an admin previewing as a volunteer cannot turn on sharing without exiting the preview', (tester, api) async {
     final state = await _pump(tester, api, 'admin', start: AppTab.me);
     state.viewAs(AppView.volunteer);
     await tester.pump(const Duration(milliseconds: 400));
-    await tester.tap(find.byKey(const Key('open-staff-map')));
-    await _settle(tester);
 
-    await tester.tap(find.byKey(const Key('share-my-location-chip')));
+    await tester.tap(find.byKey(const Key('volunteer-share-switch')));
     await _settle(tester);
-    await tester.tap(find.text('I understand — turn on sharing'));
+    await tester.tap(find.text('I understand — turn on sharing'), warnIfMissed: false);
     await _settle(tester, times: 3);
 
     expect(api.locationConsentGranted, isFalse);

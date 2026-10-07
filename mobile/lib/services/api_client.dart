@@ -330,6 +330,16 @@ class ApiClient {
     await _request(path: '/api/help-requests/$id', method: 'DELETE');
   }
 
+  // MARK: - Push notifications
+
+  Future<void> registerPushToken(String token, String environment) async {
+    await _request(path: '/api/push-token', method: 'PUT', body: {'token': token, 'environment': environment});
+  }
+
+  Future<void> unregisterPushToken(String token) async {
+    await _request(path: '/api/push-token', method: 'DELETE', body: {'token': token});
+  }
+
   // MARK: - Chat
 
   Future<List<Conversation>> fetchConversations() async {

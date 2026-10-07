@@ -48,12 +48,12 @@ class _ConsentSheet extends StatelessWidget {
                   child: const Icon(Icons.location_on_rounded, size: 34, color: Color(0xFF3A1D00)),
                 ),
                 const SizedBox(height: 18),
-                Text(forStaff ? 'Share your location with staff?' : 'Share your location?', style: Theme.of(context).textTheme.headlineSmall),
+                Text(forStaff ? 'Share your location with admins?' : 'Share your location?', style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
                 Text(
                   forStaff
-                      ? 'This helps other Ground to Growth staff find you and coordinate outreach. It is your choice, and you can stop any time.'
-                      : 'This helps our outreach team find you and bring help to you. It is your choice, and you can stop any time.',
+                      ? 'This helps Ground to Growth admins find you and coordinate outreach. It is your choice, and you can stop any time.'
+                      : 'This helps Ground to Growth find you and bring help to you. It is your choice, and you can stop any time.',
                   style: const TextStyle(fontSize: 16, height: 1.4, color: Colors.white70),
                 ),
                 const SizedBox(height: 22),
@@ -61,10 +61,10 @@ class _ConsentSheet extends StatelessWidget {
                 const _Point(Icons.schedule_rounded, 'Every 15 minutes', 'Just a quick check-in, not constant tracking.'),
                 _Point(
                   Icons.groups_rounded,
-                  forStaff ? 'Only other staff' : 'Only Ground to Growth staff',
+                  forStaff ? 'Only admins' : 'Only Ground to Growth admins',
                   forStaff
-                      ? 'Other outreach staff and volunteers who signed in with our code. People we support never see this.'
-                      : 'Outreach staff and volunteers who signed in with our code.',
+                      ? 'Ground to Growth admins only. Other volunteers and the people we support never see this.'
+                      : 'Admins at Ground to Growth. Volunteers cannot see where you are.',
                 ),
                 _Point(
                   Icons.pause_circle_rounded,

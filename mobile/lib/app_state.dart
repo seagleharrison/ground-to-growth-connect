@@ -9,6 +9,7 @@ import 'services/calendar_controller.dart';
 import 'services/chat_controller.dart';
 import 'services/help_controller.dart';
 import 'services/location_tracker.dart';
+import 'services/push_controller.dart';
 import 'services/resources_controller.dart';
 import 'services/safety_controller.dart';
 import 'services/secure_storage_service.dart';
@@ -34,12 +35,17 @@ class AppState extends ChangeNotifier {
   /// Admin-only: volunteer approval, reports and conversation review.
   final safety = SafetyController();
 
+  /// Notifications to this phone.
+  final push = PushController();
+
   AppState() {
     resources.addListener(notifyListeners);
     calendar.addListener(notifyListeners);
     help.addListener(notifyListeners);
     chat.addListener(notifyListeners);
     safety.addListener(notifyListeners);
+    push.addListener(notifyListeners);
+    chat.badgeSink = push.setBadge;
     safety.writeBlocked = _blockedByPreview;
     calendar.writeBlocked = _blockedByPreview;
     help.writeBlocked = _blockedByPreview;
@@ -58,6 +64,8 @@ class AppState extends ChangeNotifier {
     chat.dispose();
     safety.removeListener(notifyListeners);
     safety.dispose();
+    push.removeListener(notifyListeners);
+    push.dispose();
     super.dispose();
   }
 
@@ -173,7 +181,7 @@ class AppState extends ChangeNotifier {
     try {
       await _refreshProfile();
       // Everyone, staff included, can share their own location — staff sharing
-      // is visible only to other staff on the staff map, never to participants.
+      // is visible only to admins on the staff map, never to volunteers or participants.
       consent = await ApiClient.shared.fetchConsentStatus();
       consentHistory = await ApiClient.shared.fetchConsentHistory();
       await locationTracker.updateConsent(granted: consent?.granted == true);
@@ -633,6 +641,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    // Stop alerts to this phone while we can still tell the server.
+    await push.unregister();
     final id = user?.id;
     if (id != null) await SecureStorageService.deleteHiddenDocuments(id);
     hiddenDocuments = {};
@@ -657,6 +667,7 @@ class AppState extends ChangeNotifier {
     help.clearPrivate();
     chat.clearPrivate();
     safety.clearPrivate();
+    push.clearPrivate();
     isUnlocked = false;
     showWelcome = false;
     pendingRecoveryCode = null;

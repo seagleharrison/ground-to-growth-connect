@@ -125,6 +125,9 @@ class FakeApi {
 
   /// Only for taking design screenshots: lets real map tiles download instead
   /// of answering "not found". Off in the automated tests.
+  /// Phones registered for push alerts, via PUT/DELETE /api/push-token.
+  final List<String> pushTokens = [];
+
   static bool passThroughMapTiles = false;
   static final IOClient _realNetwork = IOClient(HttpClient());
 
@@ -297,6 +300,12 @@ class FakeApi {
     }
 
     switch (route) {
+      case 'PUT /api/push-token':
+        pushTokens.add((jsonDecode(request.body) as Map<String, dynamic>)['token'] as String);
+        return _json({'ok': true});
+      case 'DELETE /api/push-token':
+        pushTokens.remove((jsonDecode(request.body) as Map<String, dynamic>)['token']);
+        return _json({'ok': true});
       case 'POST /api/blocks':
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         blocked.add({'userId': body['userId'], 'name': 'Sam', 'role': 'volunteer'});

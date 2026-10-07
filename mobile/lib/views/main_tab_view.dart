@@ -5,6 +5,7 @@ import '../app_state.dart';
 import '../models/models.dart';
 import '../nav.dart';
 import '../services/location_tracker.dart';
+import '../services/push_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/nav_bar.dart';
 import 'analytics_view.dart';
@@ -29,6 +30,56 @@ class MainTabView extends StatefulWidget {
 
 class _MainTabViewState extends State<MainTabView> {
   bool _offeredLocationUpgradesThisLaunch = false;
+  PushController? _push;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final push = context.read<AppState>().push;
+      _push = push..addListener(_onPushChanged);
+      push.start();
+      _onPushChanged();
+    });
+  }
+
+  @override
+  void dispose() {
+    _push?.removeListener(_onPushChanged);
+    super.dispose();
+  }
+
+  /// Someone tapped a notification: open what it was about.
+  void _onPushChanged() {
+    final tap = _push?.takeTap();
+    if (tap == null || !mounted) return;
+    final app = context.read<AppState>();
+    final nav = context.read<TabNav>();
+    final staff = app.currentView != AppView.participant;
+    switch (tap['kind']) {
+      case 'message':
+        nav.go(staff ? AppTab.messages : AppTab.home);
+        _openChatWith(tap['userId']);
+      case 'help':
+        nav.go(staff ? AppTab.help : AppTab.home);
+      case 'help-claimed':
+        nav.go(AppTab.home);
+      case 'approved':
+        nav.go(AppTab.help);
+      case 'safety':
+        nav.go(AppTab.messages);
+    }
+  }
+
+  Future<void> _openChatWith(String? userId) async {
+    if (userId == null) return;
+    final chat = context.read<AppState>().chat;
+    await chat.refreshConversations();
+    if (!mounted) return;
+    final matches = chat.conversations.where((c) => c.userId == userId);
+    if (matches.isNotEmpty) openChat(context, matches.first);
+  }
 
   /// The moment someone lands in the app with sharing on but something about
   /// their location setup is worse than it could be, offer the fix directly
@@ -87,7 +138,7 @@ class _MainTabViewState extends State<MainTabView> {
         title: const Text('Make your location more accurate?'),
         content: const Text(
           'Precise Location is turned off for this app, so your spot on the map could '
-          'be off by a mile or more. Turning it on in Settings gives our outreach team '
+          'be off by a mile or more. Turning it on in Settings gives Ground to Growth '
           'your exact location instead of just a general area.',
         ),
         actions: [

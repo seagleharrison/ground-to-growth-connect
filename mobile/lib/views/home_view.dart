@@ -11,6 +11,7 @@ import '../widgets/ui.dart';
 import 'documents_view.dart' show missingCoreDocuments, walletColors, walletGreen, walletIcon;
 import 'edit_profile_view.dart';
 import 'messages_view.dart';
+import 'notifications_card.dart';
 import 'my_help_view.dart';
 import 'profile_avatar.dart';
 import 'sharing_sheets.dart';
@@ -62,6 +63,7 @@ class _HomeViewState extends State<HomeView> {
           FadeSlideIn(child: _WelcomeCard(name: firstName(user.name), onDismiss: app.dismissWelcome)),
           const SizedBox(height: 16),
         ],
+        const NotificationsCard(reason: 'Know right away when a volunteer is on your request or you get a message.'),
         FadeSlideIn(child: _SharingCard(app: app)),
         const SizedBox(height: 16),
         const FadeSlideIn(delay: Duration(milliseconds: 40), child: _AskForHelpCard()),
@@ -216,8 +218,8 @@ class _SharingCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 on
-                    ? 'Our outreach team can see roughly where you are, updated every 15 minutes.'
-                    : 'Turn it on so our outreach team can find you and bring help to you.',
+                    ? 'Ground to Growth admins can see roughly where you are, updated every 15 minutes. Volunteers can\'t.'
+                    : 'Turn it on so Ground to Growth can find you and bring help to you.',
                 style: const TextStyle(color: Colors.white70, height: 1.4, fontSize: 15),
               ),
               if (on) ...[

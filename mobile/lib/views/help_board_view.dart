@@ -10,6 +10,7 @@ import '../util/help_icons.dart';
 import '../util/time.dart';
 import '../widgets/ui.dart';
 import 'messages_view.dart';
+import 'notifications_card.dart';
 
 /// Help tab for volunteers and admins: what people have asked for, so they
 /// can see what's needed and step in. Taking one on tells the person someone
@@ -68,6 +69,7 @@ class _HelpBoardViewState extends State<HelpBoardView> {
             style: TextStyle(color: Colors.white60, height: 1.4),
           ),
         ),
+        const NotificationsCard(reason: 'Hear about new requests and messages even when the app is closed.'),
         if (help.boardError != null && help.boardError!.contains('approve'))
           AppCard(
             key: const Key('awaiting-approval'),

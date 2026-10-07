@@ -9,10 +9,11 @@ import '../widgets/ui.dart';
 import 'account_type_sheet.dart';
 import 'blocked_people_view.dart';
 import 'edit_profile_view.dart';
-import 'map_tab_view.dart';
 import 'my_map_tab_view.dart';
 import 'pushed_screen.dart';
+import 'notifications_card.dart';
 import 'profile_avatar.dart';
+import 'sharing_sheets.dart' show showSharingConsentSheet;
 
 class SettingsView extends StatefulWidget {
   const SettingsView({super.key});
@@ -96,14 +97,41 @@ class _SettingsViewState extends State<SettingsView> {
               ),
             ),
           ),
+          const NotificationsRow(),
           // Follows the previewed role, not just the real account, so an
-          // admin previewing sees exactly what that role sees — including how
-          // they'd actually reach a Map. Admins have it in the bottom bar.
+          // admin previewing sees exactly what that role sees. Volunteers never
+          // see where anyone is; they can only choose to let admins see them.
           if (app.currentView == AppView.volunteer)
-            _mapCard(
-              key: const Key('open-staff-map'),
-              subtitle: 'See everyone sharing their location',
-              onTap: () => PushedScreen.open(context, title: 'Map', child: const MapTabView()),
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: FadeSlideIn(
+                delay: const Duration(milliseconds: 130),
+                child: AppCard(
+                  key: const Key('volunteer-share-card'),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on_rounded, color: Brand.orange),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Share my location with admins', style: TextStyle(fontWeight: FontWeight.w700)),
+                            SizedBox(height: 2),
+                            Text('Only admins see it. Off unless you turn it on.', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        key: const Key('volunteer-share-switch'),
+                        value: app.consent?.granted == true,
+                        onChanged: (on) => on ? showSharingConsentSheet(context, forStaff: true) : app.revokeConsent(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           if (app.currentView == AppView.participant)
             Padding(

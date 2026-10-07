@@ -19,6 +19,9 @@ class ChatController extends ChangeNotifier {
   /// previewing, so nothing is sent from a preview.
   bool Function()? writeBlocked;
 
+  /// Set by AppState: keeps the app icon's badge in step with unread messages.
+  void Function(int count)? badgeSink;
+
   int get unreadTotal => conversations.fold(0, (sum, c) => sum + c.unread);
 
   /// Whether new messages can still go to this person: false once the help
@@ -41,6 +44,7 @@ class ChatController extends ChangeNotifier {
     try {
       conversations = await ApiClient.shared.fetchConversations();
       error = null;
+      badgeSink?.call(unreadTotal);
     } catch (e) {
       error = e is GgcException ? e.message : "Couldn't load your messages.";
     }

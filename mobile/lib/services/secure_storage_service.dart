@@ -87,6 +87,16 @@ class SecureStorageService {
     return (json: json, etag: await _storage.read(key: 'events_etag'));
   }
 
+  /// When someone last said "Not now" to the notifications offer, so it
+  /// doesn't come back every time the app opens.
+  static Future<void> savePushPromptDismissedAt(DateTime when) =>
+      _storage.write(key: 'push_prompt_dismissed_at', value: when.toIso8601String());
+
+  static Future<DateTime?> loadPushPromptDismissedAt() async {
+    final raw = await _storage.read(key: 'push_prompt_dismissed_at');
+    return raw == null ? null : DateTime.tryParse(raw);
+  }
+
   static Future<void> clearSession() async {
     await deleteToken();
     await deleteUser();
