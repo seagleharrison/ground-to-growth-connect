@@ -479,6 +479,57 @@ class HelpAppointment {
 /// One "I need help with..." request. The same shape serves both sides: the
 /// person who asked sees status and the helper's first name; volunteers and
 /// admins also get who asked ([userId], [name]) and whether they're the helper.
+/// A volunteer waiting for an admin to confirm they can take a request.
+class HelpOffer {
+  final String id;
+  final String volunteerId;
+  final String volunteerName;
+  final String createdAt;
+  final int thumbsUp;
+  final int thumbsDown;
+
+  HelpOffer({
+    required this.id,
+    required this.volunteerId,
+    required this.volunteerName,
+    required this.createdAt,
+    this.thumbsUp = 0,
+    this.thumbsDown = 0,
+  });
+
+  factory HelpOffer.fromJson(Map<String, dynamic> json) => HelpOffer(
+    id: json['id'] as String,
+    volunteerId: json['volunteerId'] as String,
+    volunteerName: json['volunteerName'] as String,
+    createdAt: json['createdAt'] as String,
+    thumbsUp: json['thumbsUp'] as int? ?? 0,
+    thumbsDown: json['thumbsDown'] as int? ?? 0,
+  );
+}
+
+/// A finished request in the admins' look back: who helped, and how it went.
+class HelpHistoryEntry {
+  final String id;
+  final HelpCategory category;
+  final String requester;
+  final String? helper;
+  final int? rating;
+  final String? completedAt;
+
+  HelpHistoryEntry({required this.id, required this.category, required this.requester, this.helper, this.rating, this.completedAt});
+
+  DateTime? get completedAtLocal => completedAt == null ? null : DateTime.parse(completedAt!).toLocal();
+
+  factory HelpHistoryEntry.fromJson(Map<String, dynamic> json) => HelpHistoryEntry(
+    id: json['id'] as String,
+    category: HelpCategory.fromWire(json['category'] as String),
+    requester: json['requester'] as String,
+    helper: json['helper'] as String?,
+    rating: json['rating'] as int?,
+    completedAt: json['completedAt'] as String?,
+  );
+}
+
 class HelpRequest {
   final String id;
   final HelpCategory category;
@@ -488,10 +539,24 @@ class HelpRequest {
   final String? helperName;
   final HelpAppointment? appointment;
 
+  /// Where a match is up to, from the volunteer's taps: on_my_way | arrived | late.
+  final String? progress;
+  final int? progressMinutes;
+
+  /// How the person rated it (1 or -1). Only they and admins ever see this.
+  final int? rating;
+
   // Staff view only.
   final String? userId;
   final String? name;
   final bool claimedByMe;
+
+  /// A volunteer's own offer, while an admin hasn't confirmed it ("pending").
+  final String? myOffer;
+  final String? myOfferId;
+
+  /// For admins: volunteers waiting to be confirmed on this request.
+  final List<HelpOffer> offers;
 
   HelpRequest({
     required this.id,
@@ -501,11 +566,19 @@ class HelpRequest {
     required this.createdAt,
     this.helperName,
     this.appointment,
+    this.progress,
+    this.progressMinutes,
+    this.rating,
     this.userId,
     this.name,
     this.claimedByMe = false,
+    this.myOffer,
+    this.myOfferId,
+    this.offers = const [],
   });
 
+  bool get hasMyOffer => myOffer == 'pending';
+  bool get isRated => rating != null;
   bool get isOpen => status == 'open';
   bool get isClaimed => status == 'claimed';
   bool get isDone => status == 'done';
@@ -519,9 +592,15 @@ class HelpRequest {
     createdAt: json['createdAt'] as String,
     helperName: json['helperName'] as String?,
     appointment: json['appointment'] == null ? null : HelpAppointment.fromJson(json['appointment'] as Map<String, dynamic>),
+    progress: json['progress'] as String?,
+    progressMinutes: json['progressMinutes'] as int?,
+    rating: json['rating'] as int?,
     userId: json['userId'] as String?,
     name: json['name'] as String?,
     claimedByMe: json['claimedByMe'] as bool? ?? false,
+    myOffer: json['myOffer'] as String?,
+    myOfferId: json['myOfferId'] as String?,
+    offers: [for (final o in (json['offers'] as List? ?? const [])) HelpOffer.fromJson(o as Map<String, dynamic>)],
   );
 }
 
@@ -672,8 +751,18 @@ class VolunteerInfo {
   final bool approved;
   final bool paused;
   final String createdAt;
+  final int thumbsUp;
+  final int thumbsDown;
 
-  VolunteerInfo({required this.userId, required this.name, required this.approved, required this.paused, required this.createdAt});
+  VolunteerInfo({
+    required this.userId,
+    required this.name,
+    required this.approved,
+    required this.paused,
+    required this.createdAt,
+    this.thumbsUp = 0,
+    this.thumbsDown = 0,
+  });
 
   factory VolunteerInfo.fromJson(Map<String, dynamic> json) => VolunteerInfo(
     userId: json['userId'] as String,
@@ -681,6 +770,105 @@ class VolunteerInfo {
     approved: json['approved'] as bool,
     paused: json['paused'] as bool? ?? false,
     createdAt: json['createdAt'] as String,
+    thumbsUp: json['thumbsUp'] as int? ?? 0,
+    thumbsDown: json['thumbsDown'] as int? ?? 0,
+  );
+}
+
+/// A line in the admins' people lists (opened from Analytics).
+class PersonSummary {
+  final String userId;
+  final String name;
+  final String role; // participant | volunteer | admin
+  final String joinedAt;
+  final bool sharing;
+  final bool approved;
+  final bool paused;
+  final int thumbsUp;
+  final int thumbsDown;
+
+  PersonSummary({
+    required this.userId,
+    required this.name,
+    required this.role,
+    required this.joinedAt,
+    this.sharing = false,
+    this.approved = true,
+    this.paused = false,
+    this.thumbsUp = 0,
+    this.thumbsDown = 0,
+  });
+
+  DateTime get joinedAtLocal => DateTime.parse(joinedAt).toLocal();
+
+  factory PersonSummary.fromJson(Map<String, dynamic> json) => PersonSummary(
+    userId: json['userId'] as String,
+    name: json['name'] as String,
+    role: json['role'] as String,
+    joinedAt: json['joinedAt'] as String,
+    sharing: json['sharing'] as bool? ?? false,
+    approved: json['approved'] as bool? ?? true,
+    paused: json['paused'] as bool? ?? false,
+    thumbsUp: json['thumbsUp'] as int? ?? 0,
+    thumbsDown: json['thumbsDown'] as int? ?? 0,
+  );
+}
+
+/// One person's profile for an admin: who they are and where they stand.
+/// Never includes messages, appointments, documents or locations.
+class PersonDetail extends PersonSummary {
+  final String? email;
+  final String? phone;
+  final String? gender;
+  final String? lastCheckIn;
+  final bool documentStorage;
+  final int documentsOnFile;
+  final int helpRequests;
+  final int helpRequestsDone;
+  final int helped;
+
+  PersonDetail({
+    required super.userId,
+    required super.name,
+    required super.role,
+    required super.joinedAt,
+    super.sharing,
+    super.approved,
+    super.paused,
+    super.thumbsUp,
+    super.thumbsDown,
+    this.email,
+    this.phone,
+    this.gender,
+    this.lastCheckIn,
+    this.documentStorage = false,
+    this.documentsOnFile = 0,
+    this.helpRequests = 0,
+    this.helpRequestsDone = 0,
+    this.helped = 0,
+  });
+
+  DateTime? get lastCheckInLocal => lastCheckIn == null ? null : DateTime.parse(lastCheckIn!).toLocal();
+
+  factory PersonDetail.fromJson(Map<String, dynamic> json) => PersonDetail(
+    userId: json['userId'] as String,
+    name: json['name'] as String,
+    role: json['role'] as String,
+    joinedAt: json['joinedAt'] as String,
+    sharing: json['sharing'] as bool? ?? false,
+    approved: json['approved'] as bool? ?? true,
+    paused: json['paused'] as bool? ?? false,
+    thumbsUp: json['thumbsUp'] as int? ?? 0,
+    thumbsDown: json['thumbsDown'] as int? ?? 0,
+    email: json['email'] as String?,
+    phone: json['phone'] as String?,
+    gender: json['gender'] as String?,
+    lastCheckIn: json['lastCheckIn'] as String?,
+    documentStorage: json['documentStorage'] as bool? ?? false,
+    documentsOnFile: json['documentsOnFile'] as int? ?? 0,
+    helpRequests: json['helpRequests'] as int? ?? 0,
+    helpRequestsDone: json['helpRequestsDone'] as int? ?? 0,
+    helped: json['helped'] as int? ?? 0,
   );
 }
 

@@ -101,7 +101,55 @@ class HelpController extends ChangeNotifier {
     }
   }
 
+  /// "I can help": for a volunteer this is an offer an admin must confirm.
   Future<String?> claim(String id) => _board(id, ApiClient.shared.claimHelpRequest);
+
+  Future<String?> approveOffer(String offerId) => _guard(() async {
+        final updated = await ApiClient.shared.approveHelpOffer(offerId);
+        board = [for (final r in board) if (r.id == updated.id) updated else r];
+      });
+
+  Future<String?> declineOffer(String offerId) => _guard(() async {
+        final updated = await ApiClient.shared.declineHelpOffer(offerId);
+        board = [for (final r in board) if (r.id == updated.id) updated else r];
+      });
+
+  Future<String?> withdrawOffer(String requestId, String offerId) => _guard(() async {
+        await ApiClient.shared.withdrawHelpOffer(offerId);
+        await refreshBoard();
+      });
+
+  /// A volunteer's tap: on_my_way, arrived, running_late, cant_make_it, unsafe.
+  Future<String?> progress(String requestId, String kind, {int? minutes}) => _guard(() async {
+        final updated = await ApiClient.shared.sendHelpProgress(requestId, kind, minutes: minutes);
+        board = [for (final r in board) if (r.id == requestId) updated else r];
+        // Ending a match (can't make it, unsafe) changes what the board shows.
+        if (kind == 'cant_make_it' || kind == 'unsafe') await refreshBoard();
+      });
+
+  /// The person's tap: "I don't feel safe". Ends the match.
+  Future<String?> reportUnsafe(String requestId) => _guard(() async {
+        final updated = await ApiClient.shared.sendHelpProgress(requestId, 'unsafe');
+        mine = [for (final r in mine) if (r.id == requestId) updated else r];
+      });
+
+  /// Thumbs up (1) or down (-1) once it's done.
+  Future<String?> rate(String requestId, int value) => _guard(() async {
+        final updated = await ApiClient.shared.rateHelpRequest(requestId, value);
+        mine = [for (final r in mine) if (r.id == requestId) updated else r];
+      });
+
+  Future<String?> _guard(Future<void> Function() action) async {
+    if (writeBlocked?.call() == true) return "Switched off while previewing.";
+    try {
+      await action();
+      notifyListeners();
+      return null;
+    } catch (e) {
+      refreshBoard();
+      return e is GgcException ? e.message : "Couldn't update that.";
+    }
+  }
   Future<String?> release(String id) => _board(id, ApiClient.shared.releaseHelpRequest);
   Future<String?> finish(String id) => _board(id, ApiClient.shared.completeHelpRequest, drop: true);
 

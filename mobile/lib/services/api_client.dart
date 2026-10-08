@@ -348,6 +348,36 @@ class ApiClient {
     await _request(path: '/api/help-requests/$id', method: 'DELETE');
   }
 
+  /// An admin confirms or turns down a volunteer's offer.
+  Future<HelpRequest> approveHelpOffer(String offerId) => _offerAction(offerId, 'approve');
+  Future<HelpRequest> declineHelpOffer(String offerId) => _offerAction(offerId, 'decline');
+
+  Future<HelpRequest> _offerAction(String offerId, String action) async {
+    final json = await _request(path: '/api/help-offers/$offerId/$action', method: 'POST');
+    return HelpRequest.fromJson(json['request'] as Map<String, dynamic>);
+  }
+
+  Future<void> withdrawHelpOffer(String offerId) async {
+    await _request(path: '/api/help-offers/$offerId', method: 'DELETE');
+  }
+
+  /// One-tap updates: on_my_way, arrived, running_late (with minutes),
+  /// cant_make_it, unsafe.
+  Future<HelpRequest> sendHelpProgress(String id, String kind, {int? minutes}) async {
+    final json = await _request(path: '/api/help-requests/$id/progress', method: 'POST', body: {'kind': kind, 'minutes': ?minutes});
+    return HelpRequest.fromJson(json['request'] as Map<String, dynamic>);
+  }
+
+  Future<HelpRequest> rateHelpRequest(String id, int value) async {
+    final json = await _request(path: '/api/help-requests/$id/rating', method: 'POST', body: {'value': value});
+    return HelpRequest.fromJson(json['request'] as Map<String, dynamic>);
+  }
+
+  Future<List<HelpHistoryEntry>> fetchHelpHistory() async {
+    final json = await _request(path: '/api/admin/help-history');
+    return (json['history'] as List).map((h) => HelpHistoryEntry.fromJson(h as Map<String, dynamic>)).toList();
+  }
+
   // MARK: - Push notifications
 
   Future<void> registerPushToken(String token, String environment) async {
@@ -429,6 +459,19 @@ class ApiClient {
   Future<List<AccessLogEntry>> fetchAccessLog() async {
     final json = await _request(path: '/api/admin/access-log');
     return (json['log'] as List).map((e) => AccessLogEntry.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Admins: everyone registered. [group] is "serve" (people we serve) or
+  /// "staff" (staff and volunteers).
+  Future<List<PersonSummary>> fetchPeople(String group) async {
+    final json = await _request(path: '/api/admin/people?group=$group');
+    return (json['people'] as List).map((p) => PersonSummary.fromJson(p as Map<String, dynamic>)).toList();
+  }
+
+  /// Admins: one person's profile. Each look is recorded on the server.
+  Future<PersonDetail> fetchPerson(String userId) async {
+    final json = await _request(path: '/api/admin/people/$userId');
+    return PersonDetail.fromJson(json['person'] as Map<String, dynamic>);
   }
 
   Future<List<VolunteerInfo>> fetchVolunteers() async {

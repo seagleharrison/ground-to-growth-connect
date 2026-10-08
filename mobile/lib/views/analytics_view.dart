@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../util/launch.dart';
 import '../widgets/ui.dart';
+import 'people_view.dart';
 
 /// Organization-wide numbers, for admin accounts only (the tab isn't shown to
 /// anyone else, and the server refuses the request for anyone else too).
@@ -107,6 +108,7 @@ class _Overview extends StatelessWidget {
             value: a.participants,
             label: 'People we serve',
             color: Brand.orange,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PeopleListView(group: PeopleGroup.serve))),
           ),
         ),
         const SizedBox(width: 12),
@@ -116,6 +118,7 @@ class _Overview extends StatelessWidget {
             value: a.staff,
             label: 'Staff & volunteers',
             color: Brand.blue,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PeopleListView(group: PeopleGroup.staff))),
           ),
         ),
       ],
@@ -127,16 +130,19 @@ class _BigNumber extends StatelessWidget {
   final int value;
   final String label;
   final Color color;
+  final VoidCallback onTap;
   const _BigNumber({
     super.key,
     required this.value,
     required this.label,
     required this.color,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -155,12 +161,19 @@ class _BigNumber extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.white38),
+            ],
           ),
         ],
       ),
@@ -529,7 +542,7 @@ class _PrivacyNote extends StatelessWidget {
         SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Only admins can see this page. It shows totals only — never names, locations or documents.',
+            'Only admins can see this page. The totals are anonymous; tap People we serve or Staff & volunteers to see who is registered (each look at a profile is recorded). Messages, calendars, documents and locations are never shown here.',
             style: TextStyle(
               color: Colors.white54,
               fontSize: 12.5,

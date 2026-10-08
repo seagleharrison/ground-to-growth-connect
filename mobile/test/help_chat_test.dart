@@ -55,7 +55,7 @@ void _withApi(String description, Future<void> Function(WidgetTester tester, Fak
   });
 }
 
-Map<String, dynamic> _request(String id, {String status = 'open', String category = 'ride', String userId = 'p1', String name = 'Pat Participant', Map<String, dynamic>? appointment, bool mine = false, String? helper}) => {
+Map<String, dynamic> _request(String id, {String status = 'open', String category = 'ride', String userId = 'p1', String name = 'Pat Participant', Map<String, dynamic>? appointment, bool mine = false, String? helper, Map<String, dynamic>? extra}) => {
       'id': id,
       'category': category,
       'note': 'Need to get across town',
@@ -67,11 +67,14 @@ Map<String, dynamic> _request(String id, {String status = 'open', String categor
       'userId': userId,
       'name': name,
       'claimedByMe': mine,
+      ...?extra,
     };
 
 void main() {
   group('a person getting support', () {
-    _withApi('asking for a ride with a note sends it and shows it waiting', (tester, api) async {
+    _withApi('asking for a ride means picking the appointment, and sends it waiting', (tester, api) async {
+      final soon = DateTime.now().add(const Duration(days: 1));
+      api.appointments.add({'id': 'a1', 'title': 'ID appointment', 'notes': null, 'location': 'DDS', 'startsAt': soon.toUtc().toIso8601String(), 'createdAt': '2026-10-01T00:00:00Z'});
       await _pump(tester, api);
       await tester.tap(find.byKey(const Key('ask-for-help-card')));
       await _settle(tester);
@@ -81,13 +84,49 @@ void main() {
       await tester.tap(find.byKey(const Key('category-ride')));
       await tester.pump();
       await tester.enterText(find.byKey(const Key('help-note-field')), 'To my ID appointment');
+      // No appointment yet: nothing is sent.
+      await tester.tap(find.byKey(const Key('send-help-request')), warnIfMissed: false);
+      await _settle(tester);
+      expect(api.helpRequests, isEmpty, reason: 'a ride needs an appointment');
+      expect(find.text('Which appointment is the ride to?'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('help-appointment-field')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.textContaining('ID appointment').last);
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.byKey(const Key('send-help-request')));
       await _settle(tester);
 
       expect(api.helpRequests.single['category'], 'ride');
       expect(api.helpRequests.single['note'], 'To my ID appointment');
+      expect((api.helpRequests.single['appointment'] as Map)['id'], 'a1');
       expect(find.text('Waiting for a volunteer'), findsOneWidget);
-      expect(find.text('A ride'), findsOneWidget);
+    });
+
+    _withApi('a ride with nothing on the calendar asks to add the appointment first', (tester, api) async {
+      await _pump(tester, api);
+      await tester.tap(find.byKey(const Key('ask-for-help-card')));
+      await _settle(tester);
+      await tester.tap(find.byKey(const Key('ask-for-help')));
+      await _settle(tester);
+      await tester.tap(find.byKey(const Key('category-ride')));
+      await _settle(tester, times: 2);
+      expect(find.byKey(const Key('ride-needs-appointment')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('send-help-request')), warnIfMissed: false);
+      await _settle(tester);
+      expect(api.helpRequests, isEmpty);
+    });
+
+    _withApi('a note stops at 140 characters', (tester, api) async {
+      await _pump(tester, api);
+      await tester.tap(find.byKey(const Key('ask-for-help-card')));
+      await _settle(tester);
+      await tester.tap(find.byKey(const Key('ask-for-help')));
+      await _settle(tester);
+      await tester.enterText(find.byKey(const Key('help-note-field')), 'x' * 200);
+      await tester.pump();
+      expect(tester.widget<TextField>(find.byKey(const Key('help-note-field'))).controller!.text.length, 140);
+      expect(find.text('140/140'), findsOneWidget);
     });
 
     _withApi('the request cannot be sent until something is picked', (tester, api) async {
@@ -256,18 +295,26 @@ void main() {
 
       await tester.tap(find.byKey(const Key('claim-h1')));
       await _settle(tester);
-      expect(find.text("You're on it"), findsOneWidget);
-      expect(api.helpRequests.single['status'], 'claimed');
+      // An offer, not a match: it waits for an admin to confirm.
+      expect(find.byKey(const Key('offer-waiting')), findsOneWidget);
+      expect(find.text("You're on it"), findsNothing);
+      expect(api.helpRequests.single['status'], 'open');
       expect(find.byKey(const Key('claim-h1')), findsNothing);
+      expect(find.byKey(const Key('withdraw-h1')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('withdraw-h1')));
+      await _settle(tester);
+      expect(find.byKey(const Key('claim-h1')), findsOneWidget, reason: 'taking the offer back lets them offer again');
+      expect(find.byKey(const Key('offer-waiting')), findsNothing);
     });
 
-    _withApi('Done takes a finished request off the board; "Can\'t anymore" puts it back', (tester, api) async {
+    _withApi('Done takes a finished request off the board; "Can\'t make it" puts it back', (tester, api) async {
       api.helpRequests
         ..add(_request('h1', status: 'claimed', mine: true, helper: 'Sam'))
         ..add(_request('h2', status: 'claimed', mine: true, helper: 'Sam', category: 'food'));
       await _pump(tester, api, personType: 'volunteer', name: 'Sam Helper', start: AppTab.help);
 
-      await tester.tap(find.byKey(const Key('release-h1')));
+      await tester.tap(find.byKey(const Key('cant-make-it-h1')));
       await _settle(tester);
       expect(find.byKey(const Key('claim-h1')), findsOneWidget);
 
@@ -357,6 +404,144 @@ void main() {
       expect(api.helpRequests, isEmpty);
       expect(api.appointments, isEmpty);
       expect(api.routes, isNot(contains('POST /api/help-requests')));
+    });
+  });
+
+  group('a ride, step by step, with taps instead of typing', () {
+    Map<String, dynamic> ride(String id, {String status = 'claimed', bool mine = true, String? progress, int? minutes, List<Map<String, dynamic>>? offers, String? helper = 'Sam'}) => _request(
+          id,
+          category: 'ride',
+          status: status,
+          mine: mine,
+          helper: status == 'open' ? null : helper,
+          appointment: {'id': 'a9', 'title': 'DDS visit', 'location': 'DDS Savannah', 'startsAt': DateTime.now().add(const Duration(hours: 5)).toUtc().toIso8601String()},
+          extra: {'progress': progress, 'progressMinutes': minutes, 'offers': ?offers},
+        );
+
+    _withApi('the volunteer taps On my way, then I\'ve arrived, then Done', (tester, api) async {
+      api.helpRequests.add(ride('h1'));
+      await _pump(tester, api, personType: 'volunteer', name: 'Sam Helper', start: AppTab.help);
+      expect(find.text("You're on it"), findsOneWidget);
+      expect(find.byKey(const Key('step-arrived-h1')), findsNothing, reason: 'on my way comes first');
+
+      await tester.tap(find.byKey(const Key('step-on-my-way-h1')));
+      await _settle(tester);
+      expect(api.progressTaps, ['on_my_way']);
+      expect(find.text("You're on your way"), findsOneWidget);
+      expect(find.byKey(const Key('step-on-my-way-h1')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('step-arrived-h1')));
+      await _settle(tester);
+      expect(api.progressTaps, ['on_my_way', 'arrived']);
+      expect(find.text("You've arrived"), findsOneWidget);
+      expect(find.byKey(const Key('finish-h1')), findsOneWidget);
+    });
+
+    _withApi('running late is a tap and a choice of minutes', (tester, api) async {
+      api.helpRequests.add(ride('h1', progress: 'on_my_way'));
+      await _pump(tester, api, personType: 'volunteer', name: 'Sam Helper', start: AppTab.help);
+      await tester.tap(find.byKey(const Key('late-h1')));
+      await _settle(tester, times: 3);
+      await tester.tap(find.byKey(const Key('late-h1-20')));
+      await _settle(tester);
+      expect(api.progressTaps, ['running_late']);
+      expect(find.text("You're running late (~20 min)"), findsOneWidget);
+    });
+
+    _withApi('"I don\'t feel safe" asks once, then alerts the admins and ends the match', (tester, api) async {
+      api.helpRequests.add(ride('h1'));
+      await _pump(tester, api, personType: 'volunteer', name: 'Sam Helper', start: AppTab.help);
+      await tester.tap(find.byKey(const Key('unsafe-h1')));
+      await _settle(tester, times: 3);
+      expect(find.byKey(const Key('unsafe-dialog')), findsOneWidget);
+      expect(find.textContaining('every Ground to Growth admin'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('unsafe-cancel')));
+      await _settle(tester, times: 3);
+      expect(api.progressTaps, isEmpty, reason: 'cancelling sends nothing');
+
+      await tester.tap(find.byKey(const Key('unsafe-h1')));
+      await _settle(tester, times: 3);
+      await tester.tap(find.byKey(const Key('unsafe-confirm')));
+      await _settle(tester);
+      expect(api.progressTaps, ['unsafe']);
+      expect(find.byKey(const Key('step-on-my-way-h1')), findsNothing, reason: 'the match is over');
+    });
+
+    _withApi('an admin sees who is offering, with their thumbs, and confirms one', (tester, api) async {
+      api.helpRequests.add(ride('h1', status: 'open', mine: false, offers: [
+        {'id': 'o1', 'volunteerId': 'v1', 'volunteerName': 'Sam Helper', 'createdAt': '2026-10-08T12:00:00Z', 'thumbsUp': 4, 'thumbsDown': 1},
+        {'id': 'o2', 'volunteerId': 'v2', 'volunteerName': 'Pat Helper', 'createdAt': '2026-10-08T12:05:00Z', 'thumbsUp': 0, 'thumbsDown': 0},
+      ]));
+      await _pump(tester, api, personType: 'admin', name: 'Ada Admin', start: AppTab.help);
+      expect(find.text('Volunteers offering to help'), findsOneWidget);
+      expect(find.text('Sam Helper'), findsOneWidget);
+      expect(find.text('4'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('approve-offer-o1')));
+      await _settle(tester);
+      expect(api.helpRequests.single['status'], 'claimed');
+      expect(find.text('Sam is helping'), findsOneWidget);
+      expect(find.text('Volunteers offering to help'), findsNothing);
+    });
+
+    _withApi('an admin can turn an offer down', (tester, api) async {
+      api.helpRequests.add(ride('h1', status: 'open', mine: false, offers: [
+        {'id': 'o1', 'volunteerId': 'v1', 'volunteerName': 'Sam Helper', 'createdAt': '2026-10-08T12:00:00Z', 'thumbsUp': 0, 'thumbsDown': 0},
+      ]));
+      await _pump(tester, api, personType: 'admin', name: 'Ada Admin', start: AppTab.help);
+      await tester.tap(find.byKey(const Key('decline-offer-o1')));
+      await _settle(tester);
+      expect(api.helpRequests.single['status'], 'open');
+      expect(find.byKey(const Key('offer-o1')), findsNothing);
+    });
+
+    _withApi('the person sees each step as it happens', (tester, api) async {
+      api.helpRequests.add(ride('h1', mine: false, progress: 'on_my_way')..['userId'] = 'u1');
+      final state = await _pump(tester, api);
+      await tester.tap(find.byKey(const Key('ask-for-help-card')));
+      await _settle(tester);
+      expect(find.text('Sam is on the way'), findsOneWidget);
+      api.helpRequests.single['progress'] = 'late';
+      api.helpRequests.single['progressMinutes'] = 20;
+      await state.help.refreshMine();
+      await _settle(tester);
+      expect(find.text('Sam is running late (about 20 min)'), findsOneWidget);
+    });
+
+    _withApi('the person can press "I don\'t feel safe" and the match ends', (tester, api) async {
+      api.helpRequests.add(ride('h1', mine: false)..['userId'] = 'u1');
+      await _pump(tester, api);
+      await tester.tap(find.byKey(const Key('ask-for-help-card')));
+      await _settle(tester);
+      await tester.tap(find.byKey(const Key('unsafe-h1')));
+      await _settle(tester, times: 3);
+      expect(find.textContaining("won't be able to take your requests again"), findsOneWidget);
+      await tester.tap(find.byKey(const Key('unsafe-confirm')));
+      await _settle(tester);
+      expect(api.progressTaps, ['unsafe']);
+      expect(find.text('Waiting for a volunteer'), findsOneWidget, reason: 'the request is back to waiting');
+    });
+
+    _withApi('after it is done the person gives a thumbs up, once', (tester, api) async {
+      api.helpRequests.add(ride('h1', status: 'done', mine: false)..['userId'] = 'u1'..['helperName'] = 'Sam');
+      await _pump(tester, api);
+      await tester.tap(find.byKey(const Key('ask-for-help-card')));
+      await _settle(tester);
+      expect(find.text('How did it go with Sam?'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('rate-up-h1')));
+      await _settle(tester);
+      expect(api.helpRequests.single['rating'], 1);
+      expect(find.byKey(const Key('rate-up-h1')), findsNothing);
+      expect(find.byKey(const Key('rated-h1')), findsOneWidget);
+    });
+
+    _withApi('a finished request nobody helped with is not rated', (tester, api) async {
+      api.helpRequests.add(_request('h1', status: 'done', userId: 'u1', name: 'Jane Doe', category: 'food'));
+      await _pump(tester, api);
+      await tester.tap(find.byKey(const Key('ask-for-help-card')));
+      await _settle(tester);
+      expect(find.byKey(const Key('rate-up-h1')), findsNothing);
     });
   });
 }

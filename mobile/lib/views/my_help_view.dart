@@ -7,7 +7,12 @@ import '../theme/app_theme.dart';
 import '../util/help_icons.dart';
 import '../util/time.dart';
 import '../widgets/ui.dart';
+import 'calendar_sheets.dart';
 import 'messages_view.dart';
+import 'unsafe_dialog.dart';
+
+/// How long a note on a request can be. Short on purpose.
+const kHelpNoteLimit = 140;
 
 /// Opened from Home: what I've asked for, who's helping, and a way to ask.
 class MyHelpView extends StatefulWidget {
@@ -38,6 +43,11 @@ class _MyHelpViewState extends State<MyHelpView> {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(error)));
     }
+  }
+
+  Future<void> _confirmUnsafe(HelpRequest r) async {
+    final confirmed = await showUnsafeDialog(context, helper: r.helperName);
+    if (confirmed == true) await _run(() => context.read<AppState>().help.reportUnsafe(r.id));
   }
 
   @override
@@ -77,6 +87,8 @@ class _MyHelpViewState extends State<MyHelpView> {
                 if (team.isNotEmpty) openChat(context, team.first);
               },
               canMessageTeam: app.chat.conversations.any((c) => c.role == 'team'),
+              onUnsafe: () => _confirmUnsafe(r),
+              onRate: (v) => _run(() => help.rate(r.id, v)),
             ),
           ),
       ],
@@ -90,6 +102,8 @@ class _MyRequestCard extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onMessageTeam;
   final bool canMessageTeam;
+  final VoidCallback onUnsafe;
+  final ValueChanged<int> onRate;
 
   const _MyRequestCard({
     required this.request,
@@ -97,6 +111,8 @@ class _MyRequestCard extends StatelessWidget {
     required this.onCancel,
     required this.onMessageTeam,
     required this.canMessageTeam,
+    required this.onUnsafe,
+    required this.onRate,
   });
 
   @override
@@ -106,7 +122,7 @@ class _MyRequestCard extends StatelessWidget {
     final (label, color) = r.isDone
         ? ('Done', Colors.white54)
         : r.isClaimed
-            ? ('${r.helperName ?? 'A volunteer'} is helping', Brand.green)
+            ? (helperStatus(r), Brand.green)
             : ('Waiting for a volunteer', Brand.amber);
     return AppCard(
       key: Key('my-help-${r.id}'),
@@ -154,13 +170,48 @@ class _MyRequestCard extends StatelessWidget {
                     label: const Text('Message the team'),
                   ),
                 OutlinedButton(style: compactOutlined, key: Key('all-set-${r.id}'), onPressed: onDone, child: const Text("I'm all set")),
+                if (r.isClaimed)
+                  OutlinedButton(
+                    key: Key('unsafe-${r.id}'),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44), foregroundColor: Brand.red, side: const BorderSide(color: Brand.red)),
+                    onPressed: onUnsafe,
+                    child: const Text("I don't feel safe"),
+                  ),
                 TextButton(key: Key('cancel-${r.id}'), onPressed: onCancel, child: const Text('Cancel request')),
               ],
             ),
           ],
+          if (r.isDone && r.helperName != null) ...[
+            const SizedBox(height: 12),
+            if (r.isRated)
+              Text('Thanks for letting us know how ${r.helperName} did.', key: Key('rated-${r.id}'), style: const TextStyle(color: Colors.white54, fontSize: 13))
+            else
+              Row(
+                children: [
+                  Expanded(child: Text('How did it go with ${r.helperName}?', style: const TextStyle(color: Colors.white70))),
+                  IconButton(key: Key('rate-up-${r.id}'), tooltip: 'Good', onPressed: () => onRate(1), icon: const Icon(Icons.thumb_up_alt_outlined, color: Brand.green)),
+                  IconButton(key: Key('rate-down-${r.id}'), tooltip: 'Not good', onPressed: () => onRate(-1), icon: const Icon(Icons.thumb_down_alt_outlined, color: Brand.red)),
+                ],
+              ),
+          ],
         ],
       ),
     );
+  }
+}
+
+/// "Sam is on the way", "Sam has arrived"... from the volunteer's taps.
+String helperStatus(HelpRequest r) {
+  final who = r.helperName ?? 'A volunteer';
+  switch (r.progress) {
+    case 'on_my_way':
+      return '$who is on the way';
+    case 'arrived':
+      return '$who has arrived';
+    case 'late':
+      return r.progressMinutes == null ? '$who is running late' : '$who is running late (about ${r.progressMinutes} min)';
+    default:
+      return '$who is helping';
   }
 }
 
@@ -190,6 +241,9 @@ class _AskSheetState extends State<_AskSheet> {
     _note.dispose();
     super.dispose();
   }
+
+  /// A ride needs an appointment to go to; anything else just needs a category.
+  bool get _canSend => _category != null && (_category != HelpCategory.ride || _appointmentId != null);
 
   Future<void> _send() async {
     final category = _category;
@@ -254,19 +308,45 @@ class _AskSheetState extends State<_AskSheet> {
               TextField(
                 key: const Key('help-note-field'),
                 controller: _note,
-                maxLines: 3,
-                maxLength: 500,
-                decoration: const InputDecoration(labelText: 'Anything we should know? (optional)', prefixIcon: Icon(Icons.notes_rounded)),
+                maxLines: 2,
+                maxLength: kHelpNoteLimit,
+                decoration: const InputDecoration(labelText: 'A short note (optional)', prefixIcon: Icon(Icons.notes_rounded)),
               ),
+              if (_category == HelpCategory.ride && upcoming.isEmpty) ...[
+                const SizedBox(height: 6),
+                Container(
+                  key: const Key('ride-needs-appointment'),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: Brand.surfaceHigh, borderRadius: BorderRadius.circular(16)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('A ride is to something on your calendar, so there is nothing to type. Add the appointment first.', style: TextStyle(height: 1.4, color: Colors.white70)),
+                      const SizedBox(height: 10),
+                      FilledButton.icon(
+                        style: compactFilled,
+                        key: const Key('ride-add-appointment'),
+                        onPressed: () => showAppointmentSheet(context),
+                        icon: const Icon(Icons.event_rounded, size: 18),
+                        label: const Text('Add an appointment'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               if (upcoming.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String?>(
                   key: const Key('help-appointment-field'),
                   initialValue: _appointmentId,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Need to get to an appointment? (optional)', prefixIcon: Icon(Icons.event_rounded)),
+                  decoration: InputDecoration(
+                    labelText: _category == HelpCategory.ride ? 'Which appointment is the ride to?' : 'Need to get to an appointment? (optional)',
+                    prefixIcon: const Icon(Icons.event_rounded),
+                  ),
                   items: [
-                    const DropdownMenuItem<String?>(value: null, child: Text('No appointment')),
+                    if (_category != HelpCategory.ride) const DropdownMenuItem<String?>(value: null, child: Text('No appointment')),
                     for (final a in upcoming)
                       DropdownMenuItem<String?>(
                         value: a.id,
@@ -290,7 +370,7 @@ class _AskSheetState extends State<_AskSheet> {
                 key: const Key('send-help-request'),
                 label: 'Send request',
                 loading: _sending,
-                onPressed: _category == null ? null : _send,
+                onPressed: !_canSend ? null : _send,
               ),
             ],
           ),

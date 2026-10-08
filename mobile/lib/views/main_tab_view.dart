@@ -62,10 +62,13 @@ class _MainTabViewState extends State<MainTabView> {
         nav.go(staff ? AppTab.messages : AppTab.home);
         _openChatWith(tap['userId']);
       case 'help':
+      case 'help-offer':
         nav.go(staff ? AppTab.help : AppTab.home);
       case 'help-claimed':
+      case 'help-progress':
         nav.go(AppTab.home);
       case 'approved':
+      case 'help-approved':
         nav.go(AppTab.help);
       case 'safety':
         nav.go(AppTab.messages);

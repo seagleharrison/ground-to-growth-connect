@@ -86,7 +86,7 @@ void main() {
     expect(find.textContaining('61 documents stored'), findsOneWidget);
     expect(
       find.text(
-        'Only admins can see this page. It shows totals only — never names, locations or documents.',
+        'Only admins can see this page. The totals are anonymous; tap People we serve or Staff & volunteers to see who is registered (each look at a profile is recorded). Messages, calendars, documents and locations are never shown here.',
       ),
       findsOneWidget,
     );

@@ -62,6 +62,18 @@ class FakeApi {
   /// Help requests in the volunteer-facing shape (with userId/name); the
   /// person's own list is these filtered to their id. Ids must look like h1.
   final List<Map<String, dynamic>> helpRequests = [];
+  final List<Map<String, dynamic>> helpHistory = [];
+
+  /// Everyone for the admins' people lists (GET /api/admin/people), the extra
+  /// profile fields per person, and which profiles were opened.
+  final List<Map<String, dynamic>> people = [];
+  final Map<String, Map<String, dynamic>> personExtras = {};
+  final List<String> profileLooks = [];
+  String? peopleError;
+
+  /// The one-tap updates sent during matches (on_my_way, arrived, ...), in order.
+  final List<String> progressTaps = [];
+  int _nextOfferId = 1;
   int _nextHelpId = 1;
 
   /// Contacts for GET /api/conversations, and each person's thread.
@@ -210,7 +222,7 @@ class FakeApi {
     }
 
     // Help requests: /api/help-requests[/{id}[/claim|release|complete]]
-    final helpMatch = RegExp(r'^/api/help-requests/(h\d+)(?:/(claim|release|complete))?$').firstMatch(request.url.path);
+    final helpMatch = RegExp(r'^/api/help-requests/(h\d+)(?:/(claim|release|complete|progress|rating))?$').firstMatch(request.url.path);
     if (helpMatch != null) {
       final hr = helpRequests.where((h) => h['id'] == helpMatch.group(1)).firstOrNull;
       if (hr == null) return _json({'error': 'Not found'}, status: 404);
@@ -223,15 +235,80 @@ class FakeApi {
         if (hr['status'] == 'claimed' && hr['claimedByMe'] != true) {
           return _json({'error': 'Someone else is already helping with this.'}, status: 409);
         }
-        hr['status'] = 'claimed';
-        hr['claimedByMe'] = true;
-        hr['helperName'] = (user['name'] as String).split(' ').first;
+        if (user['personType'] == 'admin') {
+          hr['status'] = 'claimed';
+          hr['claimedByMe'] = true;
+          hr['helperName'] = (user['name'] as String).split(' ').first;
+        } else if (hr['myOffer'] == null) {
+          // A volunteer's "I can help" is an offer an admin has to confirm.
+          final offerId = 'o${_nextOfferId++}';
+          hr['myOffer'] = 'pending';
+          hr['myOfferId'] = offerId;
+          (hr['offers'] ??= <Map<String, dynamic>>[]);
+          (hr['offers'] as List).add({
+            'id': offerId,
+            'volunteerId': user['id'],
+            'volunteerName': user['name'],
+            'createdAt': DateTime.now().toUtc().toIso8601String(),
+            'thumbsUp': 0,
+            'thumbsDown': 0,
+          });
+        }
+      } else if (action == 'progress') {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final kind = body['kind'] as String;
+        progressTaps.add(kind);
+        if (kind == 'cant_make_it' || kind == 'unsafe') {
+          hr['status'] = 'open';
+          hr['claimedByMe'] = false;
+          hr['helperName'] = null;
+          hr['progress'] = null;
+          hr['progressMinutes'] = null;
+        } else {
+          hr['progress'] = kind == 'running_late' ? 'late' : kind;
+          hr['progressMinutes'] = body['minutes'];
+        }
+      } else if (action == 'rating') {
+        hr['rating'] = (jsonDecode(request.body) as Map<String, dynamic>)['value'];
       } else if (action == 'release') {
         hr['status'] = 'open';
         hr['claimedByMe'] = false;
         hr['helperName'] = null;
       } else if (action == 'complete') {
         hr['status'] = 'done';
+      }
+      return _json({'request': hr});
+    }
+    // GET /api/admin/people/{id}: a person's profile, and a record that it was opened.
+    final personMatch = RegExp(r'^/api/admin/people/([\w-]+)$').firstMatch(request.url.path);
+    if (personMatch != null) {
+      if (user['personType'] != 'admin') return _json({'error': 'Admin access required'}, status: 403);
+      final person = people.where((p) => p['userId'] == personMatch.group(1)).firstOrNull;
+      if (person == null) return _json({'error': 'Not found'}, status: 404);
+      profileLooks.add(personMatch.group(1)!);
+      return _json({'person': {...person, ...?personExtras[personMatch.group(1)]}});
+    }
+    // Offers an admin confirms or declines, and a volunteer can take back.
+    final offerMatch = RegExp(r'^/api/help-offers/(o\d+)(?:/(approve|decline))?$').firstMatch(request.url.path);
+    if (offerMatch != null) {
+      final offerId = offerMatch.group(1);
+      final hr = helpRequests.where((h) => ((h['offers'] as List?) ?? const []).any((o) => (o as Map)['id'] == offerId)).firstOrNull;
+      if (hr == null) return _json({'error': 'Not found'}, status: 404);
+      final offers = hr['offers'] as List;
+      final offer = offers.firstWhere((o) => (o as Map)['id'] == offerId) as Map;
+      final action = offerMatch.group(2);
+      if (action == 'approve') {
+        hr['status'] = 'claimed';
+        hr['helperName'] = (offer['volunteerName'] as String).split(' ').first;
+        hr['offers'] = <Map<String, dynamic>>[];
+        hr['claimedByMe'] = false;
+        return _json({'request': hr});
+      }
+      offers.remove(offer);
+      if (request.method == 'DELETE') {
+        hr['myOffer'] = null;
+        hr['myOfferId'] = null;
+        return _json({'ok': true});
       }
       return _json({'request': hr});
     }
@@ -302,6 +379,13 @@ class FakeApi {
     }
 
     switch (route) {
+      case 'GET /api/admin/people':
+        if (user['personType'] != 'admin') return _json({'error': 'Admin access required'}, status: 403);
+        if (peopleError != null) return _json({'error': peopleError}, status: 500);
+        final group = request.url.queryParameters['group'];
+        return _json({'people': [for (final p in people) if ((group == 'serve') == (p['role'] == 'participant')) p]});
+      case 'GET /api/admin/help-history':
+        return _json({'history': helpHistory});
       case 'PUT /api/push-token':
         pushTokens.add((jsonDecode(request.body) as Map<String, dynamic>)['token'] as String);
         return _json({'ok': true});
