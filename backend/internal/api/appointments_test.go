@@ -153,3 +153,68 @@ func TestAppointmentsRequireAuth(t *testing.T) {
 		t.Fatalf("expected 401, got %d", code)
 	}
 }
+
+func TestAppointmentsCanHaveAnEndTimeAndBeAllDay(t *testing.T) {
+	h := newTestServer(t)
+	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	post := func(body map[string]interface{}) (int, map[string]interface{}) {
+		rec := doRequest(t, h, http.MethodPost, "/api/appointments", token, body)
+		var out map[string]interface{}
+		decodeJSON(t, rec, &out)
+		return rec.Code, out
+	}
+
+	// An old-style appointment (no end, not all day) still works.
+	code, out := post(map[string]interface{}{"title": "Check-in", "startsAt": "2026-10-01T14:00:00Z"})
+	plain := out["appointment"].(map[string]interface{})
+	if code != http.StatusCreated || plain["endsAt"] != nil || plain["allDay"] != false {
+		t.Fatalf("plain appointment: got %d %v", code, plain)
+	}
+
+	code, out = post(map[string]interface{}{"title": "DDS", "startsAt": "2026-10-01T14:00:00Z", "endsAt": "2026-10-01T15:30:00Z"})
+	timed := out["appointment"].(map[string]interface{})
+	if code != http.StatusCreated || timed["endsAt"] != "2026-10-01T15:30:00Z" {
+		t.Fatalf("timed appointment: got %d %v", code, timed)
+	}
+
+	code, out = post(map[string]interface{}{"title": "Court date", "startsAt": "2026-10-02T04:00:00Z", "allDay": true})
+	allDay := out["appointment"].(map[string]interface{})
+	if code != http.StatusCreated || allDay["allDay"] != true {
+		t.Fatalf("all-day appointment: got %d %v", code, allDay)
+	}
+
+	// The end has to come after the start, at creation and when edited.
+	if code, _ := post(map[string]interface{}{"title": "Backwards", "startsAt": "2026-10-01T14:00:00Z", "endsAt": "2026-10-01T13:00:00Z"}); code != http.StatusBadRequest {
+		t.Fatalf("end before start: expected 400, got %d", code)
+	}
+	if code, _ := post(map[string]interface{}{"title": "Junk", "startsAt": "2026-10-01T14:00:00Z", "endsAt": "tomorrow"}); code != http.StatusBadRequest {
+		t.Fatalf("bad end: expected 400, got %d", code)
+	}
+	id := timed["id"].(string)
+	rec := doRequest(t, h, http.MethodPatch, "/api/appointments/"+id, token, map[string]interface{}{"startsAt": "2026-10-01T16:00:00Z"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("moving the start past the end: expected 400, got %d", rec.Code)
+	}
+
+	// Moving both works, and a blank end clears it.
+	rec = doRequest(t, h, http.MethodPatch, "/api/appointments/"+id, token, map[string]interface{}{
+		"startsAt": "2026-10-01T16:00:00Z", "endsAt": "2026-10-01T17:00:00Z",
+	})
+	var moved map[string]interface{}
+	decodeJSON(t, rec, &moved)
+	if rec.Code != http.StatusOK || moved["appointment"].(map[string]interface{})["endsAt"] != "2026-10-01T17:00:00Z" {
+		t.Fatalf("move: got %d %v", rec.Code, moved)
+	}
+	rec = doRequest(t, h, http.MethodPatch, "/api/appointments/"+id, token, map[string]interface{}{"endsAt": ""})
+	var cleared map[string]interface{}
+	decodeJSON(t, rec, &cleared)
+	if rec.Code != http.StatusOK || cleared["appointment"].(map[string]interface{})["endsAt"] != nil {
+		t.Fatalf("clearing the end: got %d %v", rec.Code, cleared)
+	}
+	rec = doRequest(t, h, http.MethodPatch, "/api/appointments/"+id, token, map[string]interface{}{"allDay": true})
+	var flagged map[string]interface{}
+	decodeJSON(t, rec, &flagged)
+	if flagged["appointment"].(map[string]interface{})["allDay"] != true {
+		t.Fatalf("turning on all-day: got %v", flagged)
+	}
+}

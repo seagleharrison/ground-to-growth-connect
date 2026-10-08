@@ -192,3 +192,53 @@ func TestMigrateTurnsRetiredEmployeesIntoVolunteers(t *testing.T) {
 		}
 	}
 }
+
+// Appointments saved before end times and all-day existed must survive the
+// upgrade unchanged: no end time, not all day.
+func TestMigrateKeepsExistingAppointments(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "old.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE users (
+		id TEXT PRIMARY KEY,
+		person_type TEXT NOT NULL DEFAULT 'homeless',
+		name_encrypted BLOB NOT NULL,
+		token_hash TEXT NOT NULL UNIQUE,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE appointments (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		title_encrypted BLOB NOT NULL,
+		notes_encrypted BLOB,
+		location_encrypted BLOB,
+		starts_at TEXT NOT NULL,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO users (id, name_encrypted, token_hash) VALUES ('u1', x'00', 'h')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO appointments (id, user_id, title_encrypted, starts_at) VALUES ('a1', 'u1', x'00', '2026-10-01T14:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	schema := readSchema(t)
+	for i := 0; i < 2; i++ {
+		if err := Migrate(db, schema); err != nil {
+			t.Fatalf("Migrate run %d: %v", i+1, err)
+		}
+	}
+	var ends *string
+	var allDay int
+	if err := db.QueryRow(`SELECT ends_at, all_day FROM appointments WHERE id = 'a1'`).Scan(&ends, &allDay); err != nil {
+		t.Fatalf("the saved appointment should survive: %v", err)
+	}
+	if ends != nil || allDay != 0 {
+		t.Fatalf("an old appointment should have no end and not be all day, got %v / %d", ends, allDay)
+	}
+}

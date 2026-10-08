@@ -191,6 +191,8 @@ CREATE TABLE IF NOT EXISTS appointments (
   notes_encrypted BLOB,
   location_encrypted BLOB,
   starts_at TEXT NOT NULL,
+  ends_at TEXT,
+  all_day INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 

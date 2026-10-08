@@ -40,6 +40,8 @@ var columnsAddedAfterV1 = []struct{ table, column, definition string }{
 	{"users", "recovery_code_hash", "TEXT"},
 	{"users", "volunteer_approved", "INTEGER NOT NULL DEFAULT 1"},
 	{"users", "messaging_disabled", "INTEGER NOT NULL DEFAULT 0"},
+	{"appointments", "ends_at", "TEXT"},
+	{"appointments", "all_day", "INTEGER NOT NULL DEFAULT 0"},
 }
 
 func Migrate(db *sql.DB, migrationSQL string) error {

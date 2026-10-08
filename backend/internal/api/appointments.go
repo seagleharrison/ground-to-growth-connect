@@ -19,15 +19,19 @@ type appointmentJSON struct {
 	Notes     *string `json:"notes"`
 	Location  *string `json:"location"`
 	StartsAt  string  `json:"startsAt"`
+	EndsAt    *string `json:"endsAt"`
+	AllDay    bool    `json:"allDay"`
 	CreatedAt string  `json:"createdAt"`
 }
+
+const appointmentColumns = `id, title_encrypted, notes_encrypted, location_encrypted, starts_at, ends_at, all_day, created_at`
 
 func scanAppointment(row interface {
 	Scan(dest ...interface{}) error
 }) (appointmentJSON, error) {
 	var a appointmentJSON
 	var titleEnc, notesEnc, locationEnc []byte
-	if err := row.Scan(&a.ID, &titleEnc, &notesEnc, &locationEnc, &a.StartsAt, &a.CreatedAt); err != nil {
+	if err := row.Scan(&a.ID, &titleEnc, &notesEnc, &locationEnc, &a.StartsAt, &a.EndsAt, &a.AllDay, &a.CreatedAt); err != nil {
 		return a, err
 	}
 	title, err := cryptox.DecryptString(titleEnc)
@@ -55,6 +59,28 @@ type createAppointmentRequest struct {
 	Notes    *string `json:"notes"`
 	Location *string `json:"location"`
 	StartsAt string  `json:"startsAt"`
+	EndsAt   *string `json:"endsAt"`
+	AllDay   bool    `json:"allDay"`
+}
+
+// checkEnd validates an optional end time: a real date-time, after the start.
+// A blank end means "no end time".
+func checkEnd(startsAt string, endsAt *string) (*string, string) {
+	if endsAt == nil || strings.TrimSpace(*endsAt) == "" {
+		return nil, ""
+	}
+	end, err := time.Parse(time.RFC3339, *endsAt)
+	if err != nil {
+		return nil, "endsAt must be an ISO 8601 date-time"
+	}
+	start, err := time.Parse(time.RFC3339, startsAt)
+	if err != nil {
+		return nil, "startsAt must be an ISO 8601 date-time"
+	}
+	if !end.After(start) {
+		return nil, "The end has to be after the start."
+	}
+	return endsAt, ""
 }
 
 func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +102,12 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	endsAt, problem := checkEnd(body.StartsAt, body.EndsAt)
+	if problem != "" {
+		writeError(w, http.StatusBadRequest, problem)
+		return
+	}
+
 	titleEnc, err := cryptox.EncryptString(&title)
 	if err != nil {
 		writeInternalError(w, err)
@@ -93,10 +125,10 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 	}
 
 	row := s.db.QueryRow(
-		`INSERT INTO appointments (user_id, title_encrypted, notes_encrypted, location_encrypted, starts_at)
-		 VALUES (?, ?, ?, ?, ?)
-		 RETURNING id, title_encrypted, notes_encrypted, location_encrypted, starts_at, created_at`,
-		u.ID, titleEnc, notesEnc, locationEnc, body.StartsAt,
+		`INSERT INTO appointments (user_id, title_encrypted, notes_encrypted, location_encrypted, starts_at, ends_at, all_day)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		 RETURNING `+appointmentColumns,
+		u.ID, titleEnc, notesEnc, locationEnc, body.StartsAt, endsAt, body.AllDay,
 	)
 	appt, err := scanAppointment(row)
 	if err != nil {
@@ -110,7 +142,7 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 func (s *Server) handleListAppointments(w http.ResponseWriter, r *http.Request) {
 	u := userFromCtx(r)
 	rows, err := s.db.Query(
-		`SELECT id, title_encrypted, notes_encrypted, location_encrypted, starts_at, created_at
+		`SELECT `+appointmentColumns+`
 		 FROM appointments WHERE user_id = ? ORDER BY starts_at ASC`,
 		u.ID,
 	)
@@ -138,6 +170,9 @@ type updateAppointmentRequest struct {
 	Notes    *string `json:"notes"`
 	Location *string `json:"location"`
 	StartsAt *string `json:"startsAt"`
+	// An empty endsAt clears the end time.
+	EndsAt *string `json:"endsAt"`
+	AllDay *bool   `json:"allDay"`
 }
 
 func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request) {
@@ -152,10 +187,12 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 
 	var titleEnc, notesEnc, locationEnc []byte
 	var startsAt string
+	var endsAt *string
+	var allDay bool
 	err := s.db.QueryRow(
-		`SELECT title_encrypted, notes_encrypted, location_encrypted, starts_at FROM appointments WHERE id = ? AND user_id = ?`,
+		`SELECT title_encrypted, notes_encrypted, location_encrypted, starts_at, ends_at, all_day FROM appointments WHERE id = ? AND user_id = ?`,
 		id, u.ID,
-	).Scan(&titleEnc, &notesEnc, &locationEnc, &startsAt)
+	).Scan(&titleEnc, &notesEnc, &locationEnc, &startsAt, &endsAt, &allDay)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "Not found")
 		return
@@ -195,12 +232,24 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 		}
 		startsAt = *body.StartsAt
 	}
+	if body.EndsAt != nil {
+		endsAt = body.EndsAt
+	}
+	if body.AllDay != nil {
+		allDay = *body.AllDay
+	}
+	// Whatever changed, the end still has to come after the start.
+	endsAt, problem := checkEnd(startsAt, endsAt)
+	if problem != "" {
+		writeError(w, http.StatusBadRequest, problem)
+		return
+	}
 
 	row := s.db.QueryRow(
-		`UPDATE appointments SET title_encrypted = ?, notes_encrypted = ?, location_encrypted = ?, starts_at = ?
+		`UPDATE appointments SET title_encrypted = ?, notes_encrypted = ?, location_encrypted = ?, starts_at = ?, ends_at = ?, all_day = ?
 		 WHERE id = ? AND user_id = ?
-		 RETURNING id, title_encrypted, notes_encrypted, location_encrypted, starts_at, created_at`,
-		titleEnc, notesEnc, locationEnc, startsAt, id, u.ID,
+		 RETURNING `+appointmentColumns,
+		titleEnc, notesEnc, locationEnc, startsAt, endsAt, allDay, id, u.ID,
 	)
 	appt, err := scanAppointment(row)
 	if err != nil {

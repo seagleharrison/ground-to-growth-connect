@@ -13,6 +13,7 @@ type fullEvent struct {
 	Description string `json:"description"`
 	Location    string `json:"location"`
 	StartsAt    string `json:"startsAt"`
+	EndsAt      string `json:"endsAt"`
 }
 
 type fullEventsDoc struct {
@@ -46,6 +47,15 @@ func TestEventsJSONIsWellFormed(t *testing.T) {
 		}
 		if _, err := time.Parse(time.RFC3339, e.StartsAt); err != nil {
 			t.Fatalf("%s: startsAt must be RFC3339, got %q: %v", e.ID, e.StartsAt, err)
+		}
+		if e.EndsAt != "" {
+			end, err := time.Parse(time.RFC3339, e.EndsAt)
+			if err != nil {
+				t.Fatalf("%s: endsAt must be RFC3339, got %q: %v", e.ID, e.EndsAt, err)
+			}
+			if start, _ := time.Parse(time.RFC3339, e.StartsAt); !end.After(start) {
+				t.Fatalf("%s: endsAt must be after startsAt", e.ID)
+			}
 		}
 	}
 }
