@@ -97,6 +97,11 @@ class SecureStorageService {
     return raw == null ? null : DateTime.tryParse(raw);
   }
 
+  /// Which Calendar view (schedule, day, week, month) this person last used.
+  static Future<void> saveCalendarMode(String mode) => _storage.write(key: 'calendar_mode', value: mode);
+
+  static Future<String?> loadCalendarMode() => _storage.read(key: 'calendar_mode');
+
   static Future<void> clearSession() async {
     await deleteToken();
     await deleteUser();

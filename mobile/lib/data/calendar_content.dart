@@ -11,6 +11,7 @@ class CalendarEventInfo {
   final String? description;
   final String? location;
   final String startsAt;
+  final String? endsAt;
 
   const CalendarEventInfo({
     required this.id,
@@ -18,9 +19,11 @@ class CalendarEventInfo {
     this.description,
     this.location,
     required this.startsAt,
+    this.endsAt,
   });
 
   DateTime get startsAtLocal => DateTime.parse(startsAt).toLocal();
+  DateTime? get endsAtLocal => endsAt == null ? null : DateTime.parse(endsAt!).toLocal();
 
   factory CalendarEventInfo.fromJson(Map<String, dynamic> json) => CalendarEventInfo(
     id: json['id'] as String,
@@ -28,6 +31,7 @@ class CalendarEventInfo {
     description: json['description'] as String?,
     location: json['location'] as String?,
     startsAt: json['startsAt'] as String,
+    endsAt: json['endsAt'] as String?,
   );
 }
 

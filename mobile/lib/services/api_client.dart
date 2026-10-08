@@ -260,11 +260,20 @@ class ApiClient {
     String? notes,
     String? location,
     required String startsAt,
+    String? endsAt,
+    bool allDay = false,
   }) async {
     final json = await _request(
       path: '/api/appointments',
       method: 'POST',
-      body: {'title': title, 'notes': ?notes, 'location': ?location, 'startsAt': startsAt},
+      body: {
+        'title': title,
+        'notes': ?notes,
+        'location': ?location,
+        'startsAt': startsAt,
+        'endsAt': ?endsAt,
+        'allDay': allDay,
+      },
     );
     return Appointment.fromJson(json['appointment'] as Map<String, dynamic>);
   }
@@ -282,11 +291,20 @@ class ApiClient {
     String? notes,
     String? location,
     String? startsAt,
+    String? endsAt, // an empty string clears the end time
+    bool? allDay,
   }) async {
     final json = await _request(
       path: '/api/appointments/$id',
       method: 'PATCH',
-      body: {'title': ?title, 'notes': ?notes, 'location': ?location, 'startsAt': ?startsAt},
+      body: {
+        'title': ?title,
+        'notes': ?notes,
+        'location': ?location,
+        'startsAt': ?startsAt,
+        'endsAt': ?endsAt,
+        'allDay': ?allDay,
+      },
     );
     return Appointment.fromJson(json['appointment'] as Map<String, dynamic>);
   }

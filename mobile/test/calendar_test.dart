@@ -17,11 +17,13 @@ import 'support/fake_api.dart';
 
 String eventsJsonWith(List<Map<String, dynamic>> events) => jsonEncode({'updatedAt': '2026-09-26', 'events': events});
 
-Future<AppState> _pump(WidgetTester tester, FakeApi api, {String personType = 'homeless'}) async {
+/// These tests are about what's listed, so they use the Schedule view; the
+/// other views have their own tests in calendar_views_test.dart.
+Future<AppState> _pump(WidgetTester tester, FakeApi api, {String personType = 'homeless', String mode = 'schedule'}) async {
   tester.view.physicalSize = const Size(1200, 3200);
   tester.view.devicePixelRatio = 2.0;
   addTearDown(tester.view.reset);
-  FlutterSecureStorage.setMockInitialValues({'auth_token': 'tok'});
+  FlutterSecureStorage.setMockInitialValues({'auth_token': 'tok', 'calendar_mode': mode});
   api.user['personType'] = personType;
   api.user['isStaff'] = personType != 'homeless';
   final state = AppState()

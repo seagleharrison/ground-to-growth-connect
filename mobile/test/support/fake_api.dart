@@ -196,9 +196,11 @@ class FakeApi {
       if (existing == null) return _json({'error': 'Not found'}, status: 404);
       if (request.method == 'PATCH') {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
-        for (final key in ['title', 'notes', 'location', 'startsAt']) {
+        for (final key in ['title', 'notes', 'location', 'startsAt', 'allDay']) {
           if (body.containsKey(key)) existing[key] = body[key];
         }
+        // Like the server: an empty end clears it.
+        if (body.containsKey('endsAt')) existing['endsAt'] = (body['endsAt'] as String?)?.isEmpty == true ? null : body['endsAt'];
         return _json({'appointment': existing});
       }
       if (request.method == 'DELETE') {
@@ -438,6 +440,8 @@ class FakeApi {
           'notes': (body['notes'] as String?)?.isEmpty == true ? null : body['notes'],
           'location': (body['location'] as String?)?.isEmpty == true ? null : body['location'],
           'startsAt': body['startsAt'],
+          'endsAt': body['endsAt'],
+          'allDay': body['allDay'] == true,
           'createdAt': '2026-09-26T12:00:00.000Z',
         };
         appointments.add(appt);

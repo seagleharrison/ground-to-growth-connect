@@ -407,6 +407,8 @@ class Appointment {
   final String? notes;
   final String? location;
   final String startsAt;
+  final String? endsAt;
+  final bool allDay;
   final String createdAt;
 
   Appointment({
@@ -415,10 +417,13 @@ class Appointment {
     this.notes,
     this.location,
     required this.startsAt,
+    this.endsAt,
+    this.allDay = false,
     required this.createdAt,
   });
 
   DateTime get startsAtLocal => DateTime.parse(startsAt).toLocal();
+  DateTime? get endsAtLocal => endsAt == null ? null : DateTime.parse(endsAt!).toLocal();
 
   factory Appointment.fromJson(Map<String, dynamic> json) => Appointment(
     id: json['id'] as String,
@@ -426,6 +431,8 @@ class Appointment {
     notes: json['notes'] as String?,
     location: json['location'] as String?,
     startsAt: json['startsAt'] as String,
+    endsAt: json['endsAt'] as String?,
+    allDay: json['allDay'] == true,
     createdAt: json['createdAt'] as String,
   );
 }
