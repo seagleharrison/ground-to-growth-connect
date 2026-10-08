@@ -19,11 +19,11 @@ const (
 // to the board for someone else.
 func (s *Server) releaseClaims(staffID, participantID string) error {
 	if participantID == "" {
-		_, err := s.db.Exec(`UPDATE help_requests SET status = 'open', claimed_by = NULL, claimed_at = NULL WHERE claimed_by = ? AND status = 'claimed'`, staffID)
+		_, err := s.db.Exec(`UPDATE help_requests SET status = 'open', claimed_by = NULL, claimed_at = NULL, progress = NULL, progress_at = NULL, progress_minutes = NULL WHERE claimed_by = ? AND status = 'claimed'`, staffID)
 		return err
 	}
 	_, err := s.db.Exec(
-		`UPDATE help_requests SET status = 'open', claimed_by = NULL, claimed_at = NULL WHERE claimed_by = ? AND user_id = ? AND status = 'claimed'`,
+		`UPDATE help_requests SET status = 'open', claimed_by = NULL, claimed_at = NULL, progress = NULL, progress_at = NULL, progress_minutes = NULL WHERE claimed_by = ? AND user_id = ? AND status = 'claimed'`,
 		staffID, participantID)
 	return err
 }
@@ -445,6 +445,9 @@ type volunteerJSON struct {
 	Approved  bool   `json:"approved"`
 	Paused    bool   `json:"paused"`
 	CreatedAt string `json:"createdAt"`
+	// How the people they helped rated it. Admins only.
+	ThumbsUp   int `json:"thumbsUp"`
+	ThumbsDown int `json:"thumbsDown"`
 }
 
 func (s *Server) handleListVolunteers(w http.ResponseWriter, r *http.Request) {
@@ -471,6 +474,10 @@ func (s *Server) handleListVolunteers(w http.ResponseWriter, r *http.Request) {
 			v.Name = *name
 		}
 		out = append(out, v)
+	}
+	rows.Close()
+	for i := range out {
+		out[i].ThumbsUp, out[i].ThumbsDown = s.volunteerRatings(out[i].UserID)
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"volunteers": out})
 }

@@ -221,11 +221,58 @@ CREATE TABLE IF NOT EXISTS help_requests (
   claimed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
   claimed_at TEXT,
   completed_at TEXT,
+  -- Where a match is up to, set by taps: on_my_way | arrived | late.
+  progress TEXT,
+  progress_at TEXT,
+  progress_minutes INTEGER,
+  -- How it went, from the person helped: 1 or -1. Only admins see it.
+  rating INTEGER CHECK (rating IN (1, -1)),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_help_requests_user ON help_requests(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_help_requests_status ON help_requests(status, created_at);
+
+-- A volunteer saying "I can help" is an offer, not a match: an admin confirms
+-- each one before the person is told anyone is coming.
+CREATE TABLE IF NOT EXISTS help_offers (
+  id TEXT PRIMARY KEY DEFAULT (
+    lower(hex(randomblob(4))) || '-' ||
+    lower(hex(randomblob(2))) || '-4' ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    substr('89ab', abs(random()) % 4 + 1, 1) ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    lower(hex(randomblob(6)))
+  ),
+  request_id TEXT NOT NULL REFERENCES help_requests(id) ON DELETE CASCADE,
+  volunteer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined', 'withdrawn')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  decided_at TEXT,
+  decided_by TEXT REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_help_offers_request ON help_offers(request_id, status);
+CREATE INDEX IF NOT EXISTS idx_help_offers_volunteer ON help_offers(volunteer_id, status);
+
+-- A record of the taps during a match (on my way, arrived, can't make it,
+-- "I don't feel safe"...), kept for admins to look back on.
+CREATE TABLE IF NOT EXISTS help_events (
+  id TEXT PRIMARY KEY DEFAULT (
+    lower(hex(randomblob(4))) || '-' ||
+    lower(hex(randomblob(2))) || '-4' ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    substr('89ab', abs(random()) % 4 + 1, 1) ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    lower(hex(randomblob(6)))
+  ),
+  request_id TEXT NOT NULL REFERENCES help_requests(id) ON DELETE CASCADE,
+  actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_help_events_request ON help_events(request_id, created_at);
 
 -- One-to-one chat between a participant and the staff member helping them (or
 -- the Ground to Growth team). Encrypted at rest; deleted with either account.
@@ -286,6 +333,15 @@ CREATE TABLE IF NOT EXISTS message_access_log (
   admin_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   user_a TEXT NOT NULL,
   user_b TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- Every time an admin opens someone's profile from the people lists. Kept so
+-- there is always a record of who looked at whom, and when.
+CREATE TABLE IF NOT EXISTS profile_access_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  subject_id TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 

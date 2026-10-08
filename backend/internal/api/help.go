@@ -3,10 +3,12 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"ground-to-growth-connect-backend/internal/cryptox"
 	"ground-to-growth-connect-backend/internal/push"
@@ -15,7 +17,7 @@ import (
 var helpCategories = []string{"food", "shelter", "ride", "documents", "clothing", "health", "work", "other"}
 
 const (
-	maxHelpNoteRunes     = 500
+	maxHelpNoteRunes     = 140
 	maxActiveHelpPerUser = 10
 )
 
@@ -37,6 +39,13 @@ type helpRequestJSON struct {
 	ClaimedAt   *string              `json:"claimedAt"`
 	HelperName  *string              `json:"helperName"`
 	Appointment *helpAppointmentJSON `json:"appointment"`
+	// Where a match is up to, from the helper's taps: on_my_way | arrived | late.
+	Progress        *string `json:"progress"`
+	ProgressAt      *string `json:"progressAt"`
+	ProgressMinutes *int    `json:"progressMinutes"`
+	// How it went, from the person helped (1 or -1). Admins see everyone's;
+	// a person sees only their own; volunteers never see it.
+	Rating *int `json:"rating"`
 }
 
 // staffHelpRequestJSON is the volunteer/admin view: the same plus who asked.
@@ -45,12 +54,18 @@ type staffHelpRequestJSON struct {
 	UserID      string `json:"userId"`
 	Name        string `json:"name"`
 	ClaimedByMe bool   `json:"claimedByMe"`
+	// A volunteer's own offer on this request, while an admin hasn't confirmed it.
+	MyOffer   *string `json:"myOffer"`
+	MyOfferID *string `json:"myOfferId"`
+	// For admins: the volunteers waiting to be confirmed on an open request.
+	Offers []offerJSON `json:"offers,omitempty"`
 }
 
 const helpRequestSelect = `
 	SELECT hr.id, hr.user_id, u.name_encrypted, hr.category, hr.note_encrypted, hr.status,
 	       hr.created_at, hr.claimed_at, hr.claimed_by, h.name_encrypted,
-	       a.id, a.title_encrypted, a.location_encrypted, a.starts_at
+	       a.id, a.title_encrypted, a.location_encrypted, a.starts_at,
+	       hr.progress, hr.progress_at, hr.progress_minutes, hr.rating
 	FROM help_requests hr
 	JOIN users u ON u.id = hr.user_id
 	LEFT JOIN users h ON h.id = hr.claimed_by
@@ -68,11 +83,17 @@ func scanHelpRequest(row interface {
 }, viewerID string) (staffHelpRequestJSON, error) {
 	var r staffHelpRequestJSON
 	var nameEnc, noteEnc, helperEnc, apptTitleEnc, apptLocEnc []byte
-	var claimedAt, claimedBy, apptID, apptStarts sql.NullString
+	var claimedAt, claimedBy, apptID, apptStarts, progress, progressAt sql.NullString
+	var progressMinutes, rating sql.NullInt64
 	if err := row.Scan(&r.ID, &r.UserID, &nameEnc, &r.Category, &noteEnc, &r.Status,
 		&r.CreatedAt, &claimedAt, &claimedBy, &helperEnc,
-		&apptID, &apptTitleEnc, &apptLocEnc, &apptStarts); err != nil {
+		&apptID, &apptTitleEnc, &apptLocEnc, &apptStarts,
+		&progress, &progressAt, &progressMinutes, &rating); err != nil {
 		return r, err
+	}
+	if rating.Valid {
+		v := int(rating.Int64)
+		r.Rating = &v
 	}
 	name, err := cryptox.DecryptString(nameEnc)
 	if err != nil {
@@ -89,9 +110,24 @@ func scanHelpRequest(row interface {
 	if r.Status == "claimed" && !claimedBy.Valid {
 		r.Status = "open"
 	}
+	// Who helped stays known once it's done, so the person can rate it.
+	if r.Status == "done" && claimedBy.Valid {
+		if helper, err := cryptox.DecryptString(helperEnc); err != nil {
+			return r, err
+		} else if helper != nil {
+			first := firstName(*helper)
+			r.HelperName = &first
+		}
+	}
 	if r.Status == "claimed" {
 		r.ClaimedAt = toPtr(claimedAt)
 		r.ClaimedByMe = claimedBy.String == viewerID
+		r.Progress = toPtr(progress)
+		r.ProgressAt = toPtr(progressAt)
+		if progressMinutes.Valid {
+			m := int(progressMinutes.Int64)
+			r.ProgressMinutes = &m
+		}
 		if helper, err := cryptox.DecryptString(helperEnc); err != nil {
 			return r, err
 		} else if helper != nil {
@@ -162,9 +198,15 @@ func (s *Server) handleCreateHelpRequest(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	note := trimmedOrNil(body.Note)
-	if note != nil {
-		n := truncateRunes(*note, maxHelpNoteRunes)
-		note = &n
+	if note != nil && utf8.RuneCountInString(*note) > maxHelpNoteRunes {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Keep the note short: up to %d characters.", maxHelpNoteRunes))
+		return
+	}
+	// A ride is always to something on the calendar, so nobody has to type
+	// an address or time.
+	if body.Category == "ride" && (body.AppointmentID == nil || *body.AppointmentID == "") {
+		writeError(w, http.StatusBadRequest, "Pick the appointment you need a ride to.")
+		return
 	}
 
 	var apptArg interface{}
@@ -263,6 +305,10 @@ func (s *Server) handleHelpBoard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sort.SliceStable(rs, func(i, j int) bool { return rank(rs[i]) < rank(rs[j]) })
+	if err := s.attachOffers(rs, viewer); err != nil {
+		writeInternalError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"requests": rs})
 }
 
@@ -276,11 +322,17 @@ func (s *Server) respondStaffHelpRequest(w http.ResponseWriter, viewerID, id str
 		writeError(w, http.StatusNotFound, "Not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"request": req})
+	one := []staffHelpRequestJSON{*req}
+	if viewer, err := s.loadPerson(viewerID); err == nil && viewer != nil {
+		_ = s.attachOffers(one, &authUser{ID: viewerID, PersonType: viewer.Type})
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"request": one[0]})
 }
 
 func nowStamp() string { return time.Now().UTC().Format("2006-01-02T15:04:05.000Z") }
 
+// handleClaimHelpRequest is "I can help". For a volunteer that is an offer an
+// admin must confirm; an admin can take a request on directly.
 func (s *Server) handleClaimHelpRequest(w http.ResponseWriter, r *http.Request) {
 	u := userFromCtx(r)
 	id := r.PathValue("id")
@@ -288,8 +340,12 @@ func (s *Server) handleClaimHelpRequest(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusForbidden, "Your volunteer account is paused. Please contact Ground to Growth.")
 		return
 	}
+	if u.PersonType != "admin" {
+		s.offerHelp(w, u, id)
+		return
+	}
 	res, err := s.db.Exec(
-		`UPDATE help_requests SET status = 'claimed', claimed_by = ?, claimed_at = ?
+		`UPDATE help_requests SET status = 'claimed', claimed_by = ?, claimed_at = ?, progress = NULL, progress_at = NULL, progress_minutes = NULL
 		 WHERE id = ? AND (status = 'open' OR (status = 'claimed' AND claimed_by IS NULL))
 		   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = help_requests.user_id AND b.blocked_id = ?)`,
 		u.ID, nowStamp(), id, u.ID,
@@ -337,11 +393,11 @@ func (s *Server) handleReleaseHelpRequest(w http.ResponseWriter, r *http.Request
 	u := userFromCtx(r)
 	id := r.PathValue("id")
 	// Admins can free up a request someone else claimed and went quiet on.
-	query := `UPDATE help_requests SET status = 'open', claimed_by = NULL, claimed_at = NULL
+	query := `UPDATE help_requests SET status = 'open', claimed_by = NULL, claimed_at = NULL, progress = NULL, progress_at = NULL, progress_minutes = NULL
 	          WHERE id = ? AND status = 'claimed' AND claimed_by = ?`
 	args := []interface{}{id, u.ID}
 	if u.PersonType == "admin" {
-		query = `UPDATE help_requests SET status = 'open', claimed_by = NULL, claimed_at = NULL
+		query = `UPDATE help_requests SET status = 'open', claimed_by = NULL, claimed_at = NULL, progress = NULL, progress_at = NULL, progress_minutes = NULL
 		         WHERE id = ? AND status = 'claimed'`
 		args = []interface{}{id}
 	}

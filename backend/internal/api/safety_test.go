@@ -80,8 +80,7 @@ func TestSwitchingToVolunteerStartsUnapprovedAndLeavingStaffReleasesRequests(t *
 	}
 	doRequest(t, h, http.MethodPost, "/api/admin/volunteers/"+idOf(patU)+"/approve", ada, nil)
 	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", pat, nil)
-
+	matchVolunteer(t, h, pat, id)
 	patchMe(t, h, pat, map[string]interface{}{"personType": "homeless"})
 	if asMap(t, board(t, h, ada)[0])["status"] != "open" {
 		t.Fatalf("someone who stops being a volunteer should hand back what they took on")
@@ -127,9 +126,8 @@ func TestBlockingAVolunteerEndsTheirHelpAndHidesTheRequest(t *testing.T) {
 	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
 	pat, _ := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode})
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-
+	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
+	matchVolunteer(t, h, sam, id)
 	rec := doRequest(t, h, http.MethodPost, "/api/blocks", jane, map[string]interface{}{"userId": idOf(samU)})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("block: expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -184,9 +182,8 @@ func TestReportingAVolunteerBlocksThemAtOnceAndAdminsSeeIt(t *testing.T) {
 	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	ada, _ := newAdmin(t, h)
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-
+	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
+	matchVolunteer(t, h, sam, id)
 	rec := doRequest(t, h, http.MethodPost, "/api/reports", jane, map[string]interface{}{"userId": idOf(samU), "reason": "Made me uncomfortable"})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("report: expected 201, got %d: %s", rec.Code, rec.Body.String())
@@ -244,8 +241,8 @@ func TestAdminCanReviewConversationsAndEveryLookIsLogged(t *testing.T) {
 	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	ada, _ := newAdmin(t, h)
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
+	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
+	matchVolunteer(t, h, sam, id)
 	seedMessage(t, db, idOf(samU), idOf(janeU), "I'll pick you up at nine")
 	seedMessage(t, db, idOf(janeU), idOf(samU), "Thank you")
 
@@ -295,8 +292,8 @@ func TestAConversationWithAnOpenReportIsFlagged(t *testing.T) {
 	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	ada, _ := newAdmin(t, h)
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
+	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
+	matchVolunteer(t, h, sam, id)
 	seedMessage(t, db, idOf(samU), idOf(janeU), "hello")
 	doRequest(t, h, http.MethodPost, "/api/reports", jane, map[string]interface{}{"userId": idOf(samU)})
 
@@ -312,9 +309,8 @@ func TestPausingAVolunteerStopsTheirMessagingAndHelpAtOnce(t *testing.T) {
 	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	ada, _ := newAdmin(t, h)
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-
+	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
+	matchVolunteer(t, h, sam, id)
 	if code := doRequest(t, h, http.MethodPost, "/api/admin/volunteers/"+idOf(samU)+"/pause", ada, nil).Code; code != http.StatusOK {
 		t.Fatalf("pause: expected 200, got %d", code)
 	}
@@ -338,9 +334,8 @@ func TestRevokingApprovalTakesAccessAwayAndFreesTheirRequests(t *testing.T) {
 	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	ada, _ := newAdmin(t, h)
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-
+	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
+	matchVolunteer(t, h, sam, id)
 	doRequest(t, h, http.MethodPost, "/api/admin/volunteers/"+idOf(samU)+"/revoke", ada, nil)
 	if code := doRequest(t, h, http.MethodGet, "/api/help-requests", sam, nil).Code; code != http.StatusForbidden {
 		t.Fatalf("revoked volunteer: expected 403, got %d", code)

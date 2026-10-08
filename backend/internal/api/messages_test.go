@@ -81,8 +81,8 @@ func TestChatOnlyRunsThroughAdmins(t *testing.T) {
 	ada, adaU := newAdmin(t, h)
 
 	// Volunteers and participants never reach each other, even mid-request.
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
+	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
+	matchVolunteer(t, h, sam, id)
 	if code := send(t, h, sam, idOf(janeU), "I'll pick you up at 9"); code != http.StatusForbidden {
 		t.Fatalf("volunteer to participant: expected 403, got %d", code)
 	}

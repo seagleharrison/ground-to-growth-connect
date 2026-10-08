@@ -157,7 +157,7 @@ func TestANewHelpRequestAlertsApprovedStaffButNotPendingBlockedOrPausedOnes(t *t
 	doRequest(t, h, http.MethodPost, "/api/admin/volunteers/"+idOf(pausedU)+"/pause", ada, nil)
 	f.reset()
 
-	createHelp(t, h, jane, map[string]interface{}{"category": "ride", "note": "private note about my situation"})
+	createHelp(t, h, jane, map[string]interface{}{"category": "food", "note": "private note about my situation"})
 
 	for token, want := range map[string]int{tok("1"): 1, tok("2"): 1, tok("3"): 0, tok("4"): 0, tok("5"): 0, tok("6"): 0} {
 		if got := len(f.to(token)); got != want {
@@ -175,15 +175,15 @@ func TestClaimingTellsThePersonSomeoneIsHelping(t *testing.T) {
 	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
 	registerToken(t, h, jane, tok("a"))
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "ride"})["id"].(string)
+	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
 	f.reset()
 
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
+	matchVolunteer(t, h, sam, id)
 	got := f.to(tok("a"))
 	if len(got) != 1 || got[0].n.Title != "Help is on the way" || strings.Contains(got[0].n.Body, "Sam") {
 		t.Fatalf("expected one generic alert, got %v", got)
 	}
-	// Claiming it again does not alert twice.
+	// Offering again, or tapping "I can help" on something already theirs, does not alert twice.
 	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
 	if len(f.to(tok("a"))) != 1 {
 		t.Fatalf("a repeated claim must not send another alert")

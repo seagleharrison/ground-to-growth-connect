@@ -42,7 +42,7 @@ func TestHelpRequestLifecycleAcrossParticipantAndVolunteer(t *testing.T) {
 	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
 
-	req := createHelp(t, h, jane, map[string]interface{}{"category": "ride", "note": "Need to get to my appointment"})
+	req := createHelp(t, h, jane, map[string]interface{}{"category": "food", "note": "Need to get to my appointment"})
 	id := req["id"].(string)
 	if req["status"] != "open" || req["note"] != "Need to get to my appointment" {
 		t.Fatalf("unexpected new request: %v", req)
@@ -54,15 +54,29 @@ func TestHelpRequestLifecycleAcrossParticipantAndVolunteer(t *testing.T) {
 		t.Fatalf("expected 1 request on the board, got %d", len(list))
 	}
 	first := asMap(t, list[0])
-	if first["name"] != "Jane Doe" || first["category"] != "ride" {
+	if first["name"] != "Jane Doe" || first["category"] != "food" {
 		t.Fatalf("unexpected board entry: %v", first)
 	}
 
-	// Claim it: Jane then sees Sam's first name.
+	// "I can help" is only an offer: Jane isn't told anyone is coming until an admin confirms.
 	rec := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("claim: expected 200, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("offer: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+	var offered map[string]interface{}
+	decodeJSON(t, rec, &offered)
+	if asMap(t, offered["request"])["myOffer"] != "pending" || asMap(t, offered["request"])["status"] != "open" {
+		t.Fatalf("the offer should wait for an admin, got %v", offered)
+	}
+	var waiting map[string]interface{}
+	decodeJSON(t, doRequest(t, h, http.MethodGet, "/api/help-requests/mine", jane, nil), &waiting)
+	if w0 := asMap(t, waiting["requests"].([]interface{})[0]); w0["status"] != "open" || w0["helperName"] != nil {
+		t.Fatalf("Jane must not see a helper before an admin confirms, got %v", w0)
+	}
+	admin, _ := registerUser(t, h, map[string]interface{}{"name": "Ada Admin", "personType": "admin", "staffCode": testStaffCode})
+	approveOffer(t, h, admin, id, "")
+
+	// Confirmed: Jane then sees Sam's first name.
 	var mine map[string]interface{}
 	decodeJSON(t, doRequest(t, h, http.MethodGet, "/api/help-requests/mine", jane, nil), &mine)
 	r0 := asMap(t, mine["requests"].([]interface{})[0])
@@ -77,7 +91,7 @@ func TestHelpRequestLifecycleAcrossParticipantAndVolunteer(t *testing.T) {
 	if asMap(t, board(t, h, sam)[0])["status"] != "open" {
 		t.Fatalf("released request should be open again")
 	}
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
+	matchVolunteer(t, h, sam, id)
 	if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/complete", sam, nil).Code; code != http.StatusOK {
 		t.Fatalf("complete: expected 200, got %d", code)
 	}
@@ -93,11 +107,25 @@ func TestOnlyOneVolunteerCanClaimAtATime(t *testing.T) {
 	pat, _ := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode})
 	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
 
-	if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil).Code; code != http.StatusOK {
-		t.Fatalf("first claim: expected 200, got %d", code)
+	ada, _ := registerUser(t, h, map[string]interface{}{"name": "Ada Admin", "personType": "admin", "staffCode": testStaffCode})
+	// Both can offer; the admin picks one.
+	for _, v := range []string{sam, pat} {
+		if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", v, nil).Code; code != http.StatusOK {
+			t.Fatalf("offer: expected 200, got %d", code)
+		}
+	}
+	patOffer := ""
+	for _, o := range asMap(t, board(t, h, ada)[0])["offers"].([]interface{}) {
+		if asMap(t, o)["volunteerName"] == "Pat" {
+			patOffer = asMap(t, o)["id"].(string)
+		}
+	}
+	approveOffer(t, h, ada, id, "Sam")
+	if code := doRequest(t, h, http.MethodPost, "/api/help-offers/"+patOffer+"/approve", ada, nil).Code; code != http.StatusConflict {
+		t.Fatalf("approving the other offer after Sam was matched: expected 409, got %d", code)
 	}
 	if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", pat, nil).Code; code != http.StatusConflict {
-		t.Fatalf("second claim: expected 409, got %d", code)
+		t.Fatalf("offering once someone is matched: expected 409, got %d", code)
 	}
 	if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/release", pat, nil).Code; code != http.StatusNotFound {
 		t.Fatalf("someone else cannot release it: expected 404, got %d", code)
@@ -197,8 +225,7 @@ func TestClaimedRequestReturnsToBoardWhenTheVolunteerLeaves(t *testing.T) {
 	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
 	pat, _ := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode})
 	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-
+	matchVolunteer(t, h, sam, id)
 	doRequest(t, h, http.MethodDelete, "/api/account", sam, nil)
 
 	entry := asMap(t, board(t, h, pat)[0])
@@ -235,9 +262,45 @@ func TestAdminCanFreeAStuckRequest(t *testing.T) {
 	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
 	ada, _ := registerUser(t, h, map[string]interface{}{"name": "Ada", "personType": "admin", "staffCode": testStaffCode})
 	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-
+	matchVolunteer(t, h, sam, id)
 	if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/release", ada, nil).Code; code != http.StatusOK {
 		t.Fatalf("admin release: expected 200, got %d", code)
 	}
+}
+
+// matchVolunteer is what "I can help" takes now: the volunteer offers, then an
+// admin confirms. It leaves the request claimed by that volunteer.
+func matchVolunteer(t *testing.T, h http.Handler, volunteerToken, requestID string) {
+	t.Helper()
+	if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+requestID+"/claim", volunteerToken, nil).Code; code != http.StatusOK {
+		t.Fatalf("offer: expected 200, got %d", code)
+	}
+	admin, _ := registerUser(t, h, map[string]interface{}{"name": "Match Admin", "personType": "admin", "staffCode": testStaffCode})
+	approveOffer(t, h, admin, requestID, "")
+}
+
+// approveOffer approves the pending offer on a request (the one from volunteerName
+// when given, otherwise the first) and returns the offer's id.
+func approveOffer(t *testing.T, h http.Handler, adminToken, requestID, volunteerName string) string {
+	t.Helper()
+	for _, r := range board(t, h, adminToken) {
+		req := asMap(t, r)
+		if req["id"] != requestID {
+			continue
+		}
+		offers, _ := req["offers"].([]interface{})
+		for _, o := range offers {
+			offer := asMap(t, o)
+			if volunteerName != "" && offer["volunteerName"] != volunteerName {
+				continue
+			}
+			id := offer["id"].(string)
+			if code := doRequest(t, h, http.MethodPost, "/api/help-offers/"+id+"/approve", adminToken, nil).Code; code != http.StatusOK {
+				t.Fatalf("approve: expected 200, got %d", code)
+			}
+			return id
+		}
+	}
+	t.Fatalf("no pending offer found on %s", requestID)
+	return ""
 }
