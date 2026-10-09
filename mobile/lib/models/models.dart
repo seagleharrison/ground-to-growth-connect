@@ -409,6 +409,12 @@ class Appointment {
   final String startsAt;
   final String? endsAt;
   final bool allDay;
+
+  /// appointment (something to attend, can ask for a ride) | event (their own).
+  final String kind;
+
+  /// A ride has been asked for and isn't done yet.
+  final bool needsRide;
   final String createdAt;
 
   Appointment({
@@ -419,8 +425,12 @@ class Appointment {
     required this.startsAt,
     this.endsAt,
     this.allDay = false,
+    this.kind = 'appointment',
+    this.needsRide = false,
     required this.createdAt,
   });
+
+  bool get isEvent => kind == 'event';
 
   DateTime get startsAtLocal => DateTime.parse(startsAt).toLocal();
   DateTime? get endsAtLocal => endsAt == null ? null : DateTime.parse(endsAt!).toLocal();
@@ -433,6 +443,8 @@ class Appointment {
     startsAt: json['startsAt'] as String,
     endsAt: json['endsAt'] as String?,
     allDay: json['allDay'] == true,
+    kind: json['kind'] as String? ?? 'appointment',
+    needsRide: json['needsRide'] == true,
     createdAt: json['createdAt'] as String,
   );
 }
@@ -446,7 +458,10 @@ enum HelpCategory {
   clothing('clothing', 'Clothing or hygiene'),
   health('health', 'Health'),
   work('work', 'Work'),
-  other('other', 'Something else');
+  other('other', 'Something else'),
+
+  /// Basic items picked from a list (water, socks, a blanket...).
+  supplies('supplies', 'Basic items');
 
   final String wireValue;
   final String label;
@@ -479,34 +494,6 @@ class HelpAppointment {
 /// One "I need help with..." request. The same shape serves both sides: the
 /// person who asked sees status and the helper's first name; volunteers and
 /// admins also get who asked ([userId], [name]) and whether they're the helper.
-/// A volunteer waiting for an admin to confirm they can take a request.
-class HelpOffer {
-  final String id;
-  final String volunteerId;
-  final String volunteerName;
-  final String createdAt;
-  final int thumbsUp;
-  final int thumbsDown;
-
-  HelpOffer({
-    required this.id,
-    required this.volunteerId,
-    required this.volunteerName,
-    required this.createdAt,
-    this.thumbsUp = 0,
-    this.thumbsDown = 0,
-  });
-
-  factory HelpOffer.fromJson(Map<String, dynamic> json) => HelpOffer(
-    id: json['id'] as String,
-    volunteerId: json['volunteerId'] as String,
-    volunteerName: json['volunteerName'] as String,
-    createdAt: json['createdAt'] as String,
-    thumbsUp: json['thumbsUp'] as int? ?? 0,
-    thumbsDown: json['thumbsDown'] as int? ?? 0,
-  );
-}
-
 /// A finished request in the admins' look back: who helped, and how it went.
 class HelpHistoryEntry {
   final String id;
@@ -551,12 +538,8 @@ class HelpRequest {
   final String? name;
   final bool claimedByMe;
 
-  /// A volunteer's own offer, while an admin hasn't confirmed it ("pending").
-  final String? myOffer;
-  final String? myOfferId;
-
-  /// For admins: volunteers waiting to be confirmed on this request.
-  final List<HelpOffer> offers;
+  /// Basic items asked for on a supplies request (codes from supply_items.dart).
+  final List<String> items;
 
   HelpRequest({
     required this.id,
@@ -572,12 +555,9 @@ class HelpRequest {
     this.userId,
     this.name,
     this.claimedByMe = false,
-    this.myOffer,
-    this.myOfferId,
-    this.offers = const [],
+    this.items = const [],
   });
 
-  bool get hasMyOffer => myOffer == 'pending';
   bool get isRated => rating != null;
   bool get isOpen => status == 'open';
   bool get isClaimed => status == 'claimed';
@@ -598,9 +578,7 @@ class HelpRequest {
     userId: json['userId'] as String?,
     name: json['name'] as String?,
     claimedByMe: json['claimedByMe'] as bool? ?? false,
-    myOffer: json['myOffer'] as String?,
-    myOfferId: json['myOfferId'] as String?,
-    offers: [for (final o in (json['offers'] as List? ?? const [])) HelpOffer.fromJson(o as Map<String, dynamic>)],
+    items: [for (final i in (json['items'] as List? ?? const [])) i as String],
   );
 }
 

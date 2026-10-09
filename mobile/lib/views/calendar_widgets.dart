@@ -69,9 +69,9 @@ class EventTile extends StatelessWidget {
                       ),
                     ),
                     Icon(
-                      i.isAppointment
-                          ? Icons.person_rounded
-                          : Icons.groups_rounded,
+                      i.isPersonalEvent
+                          ? Icons.celebration_rounded
+                          : (i.isAppointment ? Icons.person_rounded : Icons.groups_rounded),
                       size: 18,
                       color: i.onColor.withValues(alpha: 0.7),
                     ),
@@ -88,6 +88,16 @@ class EventTile extends StatelessWidget {
                 label: '${i.helper} is taking you',
                 color: Brand.green,
                 icon: Icons.volunteer_activism_rounded,
+              ),
+            )
+          else if (i.needsRide)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 2),
+              child: Pill(
+                key: Key('ride-${i.id}'),
+                label: 'Ride requested · waiting for a volunteer',
+                color: Brand.amber,
+                icon: Icons.directions_car_rounded,
               ),
             ),
         ],

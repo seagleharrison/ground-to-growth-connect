@@ -61,9 +61,9 @@ String _at(int dayOffset, int hour) {
   return DateTime(t.year, t.month, t.day + dayOffset, hour).toUtc().toIso8601String();
 }
 
-Map<String, dynamic> _ride(String id, {String status = 'claimed', bool mine = false, String? helper = 'Sam', String? progress, int? minutes, List<Map<String, dynamic>>? offers, String? myOffer, String who = 'Jane Doe', String? userId}) => {
+Map<String, dynamic> _ride(String id, {String status = 'claimed', bool mine = false, String? helper = 'Sam', String? progress, int? minutes, List<String>? items, String? category, String who = 'Jane Doe', String? userId}) => {
       'id': id,
-      'category': 'ride',
+      'category': category ?? 'ride',
       'note': 'Please be on time, I use a cane',
       'status': status,
       'createdAt': _at(0, 8),
@@ -75,9 +75,7 @@ Map<String, dynamic> _ride(String id, {String status = 'claimed', bool mine = fa
       'claimedByMe': mine,
       'progress': progress,
       'progressMinutes': minutes,
-      'myOffer': myOffer,
-      'myOfferId': myOffer == null ? null : 'o9',
-      'offers': offers ?? [],
+      'items': items ?? [],
     };
 
 void main() {
@@ -116,19 +114,18 @@ void main() {
     }, () => api.client);
   }
 
-  testWidgets('volunteer: offer waiting', (t) => run(t, '1-volunteer-offer', type: 'volunteer', start: AppTab.help, who: 'Sam Helper', seed: (api) {
+  testWidgets('volunteer: board', (t) => run(t, '1-volunteer-board', type: 'volunteer', start: AppTab.help, who: 'Sam Helper', seed: (api) {
         api.helpRequests
-          ..add(_ride('h1', status: 'open', myOffer: 'pending'))
-          ..add(_ride('h2', status: 'open', who: 'Bob Smith', userId: 'p2'));
+          ..add(_ride('h1', status: 'open'))
+          ..add(_ride('h2', status: 'open', who: 'Bob Smith', userId: 'p2', category: 'supplies', items: ['socks', 'blanket', 'water', 'hygiene_kit']));
       }));
   testWidgets('volunteer: on a ride', (t) => run(t, '2-volunteer-ride', type: 'volunteer', start: AppTab.help, who: 'Sam Helper', seed: (api) {
         api.helpRequests.add(_ride('h1', mine: true, progress: 'on_my_way'));
       }));
-  testWidgets('admin: confirm', (t) => run(t, '3-admin-confirm', type: 'admin', start: AppTab.help, who: 'Ada Admin', seed: (api) {
-        api.helpRequests.add(_ride('h1', status: 'open', offers: [
-          {'id': 'o1', 'volunteerId': 'v1', 'volunteerName': 'Sam Helper', 'createdAt': _at(0, 9), 'thumbsUp': 4, 'thumbsDown': 1},
-          {'id': 'o2', 'volunteerId': 'v2', 'volunteerName': 'Pat Newcomer', 'createdAt': _at(0, 9), 'thumbsUp': 0, 'thumbsDown': 0},
-        ]));
+  testWidgets('admin: board', (t) => run(t, '3-admin-board', type: 'admin', start: AppTab.help, who: 'Ada Admin', seed: (api) {
+        api.helpRequests
+          ..add(_ride('h1', status: 'open'))
+          ..add(_ride('h2', progress: 'on_my_way', who: 'Bob Smith', userId: 'p2'));
       }));
   testWidgets('person: ride on the way', (t) => run(t, '4-person-ride', type: 'homeless', start: AppTab.home, seed: (api) {
         api.helpRequests.add(_ride('h1', progress: 'late', minutes: 20, userId: 'u1'));
@@ -136,16 +133,26 @@ void main() {
         await t.tap(find.byKey(const Key('ask-for-help-card')));
         await _settle(t);
       }));
-  testWidgets('person: ask for a ride', (t) => run(t, '5-person-ask', type: 'homeless', start: AppTab.home, seed: (api) {
-        api.appointments.add({'id': 'a1', 'title': 'ID appointment', 'notes': null, 'location': 'DDS', 'startsAt': _at(1, 10), 'createdAt': '2026-10-01T00:00:00Z'});
-      }, after: () async {
+  testWidgets('person: basic items', (t) => run(t, '5-person-items', type: 'homeless', start: AppTab.home, seed: (api) {}, after: () async {
         await t.tap(find.byKey(const Key('ask-for-help-card')));
         await _settle(t);
         await t.tap(find.byKey(const Key('ask-for-help')));
         await _settle(t);
-        await t.tap(find.byKey(const Key('category-ride')));
+        await t.tap(find.byKey(const Key('category-supplies')));
         await _settle(t, times: 2);
-        await t.enterText(find.byKey(const Key('help-note-field')), 'I use a cane, please be on time');
+        for (final c in ['socks', 'blanket', 'water']) {
+          await t.ensureVisible(find.byKey(Key('item-$c')));
+          await t.tap(find.byKey(Key('item-$c')));
+          await t.pump();
+        }
+        await t.drag(find.byType(SingleChildScrollView).last, const Offset(0, -250));
+        await _settle(t, times: 2);
+      }));
+  testWidgets('person: new appointment', (t) => run(t, '8-new-appointment', type: 'homeless', start: AppTab.calendar, seed: (api) {}, after: () async {
+        await t.tap(find.byKey(const Key('add-appointment')));
+        await _settle(t);
+        await t.ensureVisible(find.byKey(const Key('appointment-ride-switch')));
+        await t.tap(find.byKey(const Key('appointment-ride-switch')));
         await _settle(t, times: 2);
       }));
   testWidgets('admin: people list', (t) => run(t, '6-people-list', type: 'admin', start: AppTab.analytics, who: 'Ada Admin', seed: (api) {

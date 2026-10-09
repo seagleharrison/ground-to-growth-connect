@@ -12,5 +12,6 @@ extension HelpCategoryIcon on HelpCategory {
     HelpCategory.health => Icons.medical_services_rounded,
     HelpCategory.work => Icons.work_rounded,
     HelpCategory.other => Icons.help_outline_rounded,
+    HelpCategory.supplies => Icons.inventory_2_rounded,
   };
 }

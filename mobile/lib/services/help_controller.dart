@@ -27,6 +27,14 @@ class HelpController extends ChangeNotifier {
     return null;
   }
 
+  /// The ride asked for an appointment, if it's still going.
+  HelpRequest? rideForAppointment(String appointmentId) {
+    for (final r in mine) {
+      if (!r.isDone && r.category == HelpCategory.ride && r.appointment?.id == appointmentId) return r;
+    }
+    return null;
+  }
+
   /// Called on sign-out so the next person on this phone never sees these.
   void clearPrivate() {
     mine = [];
@@ -63,10 +71,10 @@ class HelpController extends ChangeNotifier {
   }
 
   /// Each returns an error message, or null on success.
-  Future<String?> ask({required HelpCategory category, String? note, String? appointmentId}) async {
+  Future<String?> ask({required HelpCategory category, String? note, String? appointmentId, List<String>? items}) async {
     if (writeBlocked?.call() == true) return "Switched off while previewing.";
     try {
-      final created = await ApiClient.shared.createHelpRequest(category: category, note: note, appointmentId: appointmentId);
+      final created = await ApiClient.shared.createHelpRequest(category: category, note: note, appointmentId: appointmentId, items: items);
       mine = [created, ...mine];
       notifyListeners();
       return null;
@@ -101,23 +109,8 @@ class HelpController extends ChangeNotifier {
     }
   }
 
-  /// "I can help": for a volunteer this is an offer an admin must confirm.
+  /// "I can help": accepts the request, and the person is told someone is coming.
   Future<String?> claim(String id) => _board(id, ApiClient.shared.claimHelpRequest);
-
-  Future<String?> approveOffer(String offerId) => _guard(() async {
-        final updated = await ApiClient.shared.approveHelpOffer(offerId);
-        board = [for (final r in board) if (r.id == updated.id) updated else r];
-      });
-
-  Future<String?> declineOffer(String offerId) => _guard(() async {
-        final updated = await ApiClient.shared.declineHelpOffer(offerId);
-        board = [for (final r in board) if (r.id == updated.id) updated else r];
-      });
-
-  Future<String?> withdrawOffer(String requestId, String offerId) => _guard(() async {
-        await ApiClient.shared.withdrawHelpOffer(offerId);
-        await refreshBoard();
-      });
 
   /// A volunteer's tap: on_my_way, arrived, running_late, cant_make_it, unsafe.
   Future<String?> progress(String requestId, String kind, {int? minutes}) => _guard(() async {

@@ -73,7 +73,6 @@ class FakeApi {
 
   /// The one-tap updates sent during matches (on_my_way, arrived, ...), in order.
   final List<String> progressTaps = [];
-  int _nextOfferId = 1;
   int _nextHelpId = 1;
 
   /// Contacts for GET /api/conversations, and each person's thread.
@@ -143,6 +142,29 @@ class FakeApi {
   static bool passThroughMapTiles = false;
   static final IOClient _realNetwork = IOClient(HttpClient());
 
+  /// Like the server: an appointment that needs a ride has a ride request on
+  /// the board; turning it off (or deleting the appointment) removes it.
+  void _syncRide(Map<String, dynamic> appt, bool want) {
+    helpRequests.removeWhere((h) => h['category'] == 'ride' && (h['appointment'] as Map?)?['id'] == appt['id'] && h['status'] != 'done' && !want);
+    final has = helpRequests.any((h) => h['category'] == 'ride' && (h['appointment'] as Map?)?['id'] == appt['id'] && h['status'] != 'done');
+    if (want && !has) {
+      helpRequests.add({
+        'id': 'h${_nextHelpId++}',
+        'category': 'ride',
+        'note': null,
+        'status': 'open',
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+        'claimedAt': null,
+        'helperName': null,
+        'appointment': {'id': appt['id'], 'title': appt['title'], 'location': appt['location'], 'startsAt': appt['startsAt']},
+        'userId': user['id'],
+        'name': user['name'],
+        'claimedByMe': false,
+      });
+    }
+    appt['needsRide'] = want;
+  }
+
   Future<http.Response> _handle(http.Request request) async {
     if (passThroughMapTiles && request.url.host.endsWith('openstreetmap.org')) {
       final forwarded = http.Request(request.method, request.url)
@@ -208,14 +230,16 @@ class FakeApi {
       if (existing == null) return _json({'error': 'Not found'}, status: 404);
       if (request.method == 'PATCH') {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
-        for (final key in ['title', 'notes', 'location', 'startsAt', 'allDay']) {
+        for (final key in ['title', 'notes', 'location', 'startsAt', 'allDay', 'kind']) {
           if (body.containsKey(key)) existing[key] = body[key];
         }
+        if (body.containsKey('needsRide')) _syncRide(existing, body['needsRide'] == true);
         // Like the server: an empty end clears it.
         if (body.containsKey('endsAt')) existing['endsAt'] = (body['endsAt'] as String?)?.isEmpty == true ? null : body['endsAt'];
         return _json({'appointment': existing});
       }
       if (request.method == 'DELETE') {
+        _syncRide(existing, false);
         appointments.removeWhere((a) => a['id'] == id);
         return _json({'deleted': true});
       }
@@ -235,25 +259,9 @@ class FakeApi {
         if (hr['status'] == 'claimed' && hr['claimedByMe'] != true) {
           return _json({'error': 'Someone else is already helping with this.'}, status: 409);
         }
-        if (user['personType'] == 'admin') {
-          hr['status'] = 'claimed';
-          hr['claimedByMe'] = true;
-          hr['helperName'] = (user['name'] as String).split(' ').first;
-        } else if (hr['myOffer'] == null) {
-          // A volunteer's "I can help" is an offer an admin has to confirm.
-          final offerId = 'o${_nextOfferId++}';
-          hr['myOffer'] = 'pending';
-          hr['myOfferId'] = offerId;
-          (hr['offers'] ??= <Map<String, dynamic>>[]);
-          (hr['offers'] as List).add({
-            'id': offerId,
-            'volunteerId': user['id'],
-            'volunteerName': user['name'],
-            'createdAt': DateTime.now().toUtc().toIso8601String(),
-            'thumbsUp': 0,
-            'thumbsDown': 0,
-          });
-        }
+        hr['status'] = 'claimed';
+        hr['claimedByMe'] = true;
+        hr['helperName'] = (user['name'] as String).split(' ').first;
       } else if (action == 'progress') {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final kind = body['kind'] as String;
@@ -287,30 +295,6 @@ class FakeApi {
       if (person == null) return _json({'error': 'Not found'}, status: 404);
       profileLooks.add(personMatch.group(1)!);
       return _json({'person': {...person, ...?personExtras[personMatch.group(1)]}});
-    }
-    // Offers an admin confirms or declines, and a volunteer can take back.
-    final offerMatch = RegExp(r'^/api/help-offers/(o\d+)(?:/(approve|decline))?$').firstMatch(request.url.path);
-    if (offerMatch != null) {
-      final offerId = offerMatch.group(1);
-      final hr = helpRequests.where((h) => ((h['offers'] as List?) ?? const []).any((o) => (o as Map)['id'] == offerId)).firstOrNull;
-      if (hr == null) return _json({'error': 'Not found'}, status: 404);
-      final offers = hr['offers'] as List;
-      final offer = offers.firstWhere((o) => (o as Map)['id'] == offerId) as Map;
-      final action = offerMatch.group(2);
-      if (action == 'approve') {
-        hr['status'] = 'claimed';
-        hr['helperName'] = (offer['volunteerName'] as String).split(' ').first;
-        hr['offers'] = <Map<String, dynamic>>[];
-        hr['claimedByMe'] = false;
-        return _json({'request': hr});
-      }
-      offers.remove(offer);
-      if (request.method == 'DELETE') {
-        hr['myOffer'] = null;
-        hr['myOfferId'] = null;
-        return _json({'ok': true});
-      }
-      return _json({'request': hr});
     }
     final msgMatch = RegExp(r'^/api/messages/([\w-]+)$').firstMatch(request.url.path);
     if (msgMatch != null) {
@@ -448,6 +432,7 @@ class FakeApi {
           'userId': user['id'],
           'name': user['name'],
           'claimedByMe': false,
+          'items': body['items'] ?? [],
         };
         helpRequests.add(hr);
         return _json({'request': hr}, status: 201);
@@ -526,9 +511,12 @@ class FakeApi {
           'startsAt': body['startsAt'],
           'endsAt': body['endsAt'],
           'allDay': body['allDay'] == true,
+          'kind': body['kind'] ?? 'appointment',
+          'needsRide': false,
           'createdAt': '2026-09-26T12:00:00.000Z',
         };
         appointments.add(appt);
+        _syncRide(appt, body['needsRide'] == true);
         return _json({'appointment': appt}, status: 201);
       case 'GET /api/analytics/sources':
         if (user['personType'] != 'admin') return _json({'error': 'Admin access required'}, status: 403);

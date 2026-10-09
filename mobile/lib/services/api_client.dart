@@ -262,6 +262,8 @@ class ApiClient {
     required String startsAt,
     String? endsAt,
     bool allDay = false,
+    String kind = 'appointment',
+    bool needsRide = false,
   }) async {
     final json = await _request(
       path: '/api/appointments',
@@ -273,6 +275,8 @@ class ApiClient {
         'startsAt': startsAt,
         'endsAt': ?endsAt,
         'allDay': allDay,
+        'kind': kind,
+        'needsRide': needsRide,
       },
     );
     return Appointment.fromJson(json['appointment'] as Map<String, dynamic>);
@@ -293,6 +297,8 @@ class ApiClient {
     String? startsAt,
     String? endsAt, // an empty string clears the end time
     bool? allDay,
+    String? kind,
+    bool? needsRide,
   }) async {
     final json = await _request(
       path: '/api/appointments/$id',
@@ -304,6 +310,8 @@ class ApiClient {
         'startsAt': ?startsAt,
         'endsAt': ?endsAt,
         'allDay': ?allDay,
+        'kind': ?kind,
+        'needsRide': ?needsRide,
       },
     );
     return Appointment.fromJson(json['appointment'] as Map<String, dynamic>);
@@ -315,11 +323,11 @@ class ApiClient {
 
   // MARK: - Help requests
 
-  Future<HelpRequest> createHelpRequest({required HelpCategory category, String? note, String? appointmentId}) async {
+  Future<HelpRequest> createHelpRequest({required HelpCategory category, String? note, String? appointmentId, List<String>? items}) async {
     final json = await _request(
       path: '/api/help-requests',
       method: 'POST',
-      body: {'category': category.wireValue, 'note': ?note, 'appointmentId': ?appointmentId},
+      body: {'category': category.wireValue, 'note': ?note, 'appointmentId': ?appointmentId, 'items': ?items},
     );
     return HelpRequest.fromJson(json['request'] as Map<String, dynamic>);
   }
@@ -346,19 +354,6 @@ class ApiClient {
 
   Future<void> deleteHelpRequest(String id) async {
     await _request(path: '/api/help-requests/$id', method: 'DELETE');
-  }
-
-  /// An admin confirms or turns down a volunteer's offer.
-  Future<HelpRequest> approveHelpOffer(String offerId) => _offerAction(offerId, 'approve');
-  Future<HelpRequest> declineHelpOffer(String offerId) => _offerAction(offerId, 'decline');
-
-  Future<HelpRequest> _offerAction(String offerId, String action) async {
-    final json = await _request(path: '/api/help-offers/$offerId/$action', method: 'POST');
-    return HelpRequest.fromJson(json['request'] as Map<String, dynamic>);
-  }
-
-  Future<void> withdrawHelpOffer(String offerId) async {
-    await _request(path: '/api/help-offers/$offerId', method: 'DELETE');
   }
 
   /// One-tap updates: on_my_way, arrived, running_late (with minutes),

@@ -172,6 +172,8 @@ class _AppointmentSheetState extends State<AppointmentSheet> {
   late DateTime _start;
   late DateTime _end;
   late bool _allDay;
+  late String _kind; // appointment | event
+  late bool _needsRide;
   bool _saving = false;
   bool _deleting = false;
   String? _error;
@@ -184,6 +186,8 @@ class _AppointmentSheetState extends State<AppointmentSheet> {
     _notes = TextEditingController(text: existing?.notes ?? '');
     _location = TextEditingController(text: existing?.location ?? '');
     _allDay = existing?.allDay ?? false;
+    _kind = existing?.appointment?.kind ?? 'appointment';
+    _needsRide = existing?.needsRide ?? false;
     _start = existing?.start ?? widget.startingAt ?? nextHour();
     _end = existing?.end ?? _start.add(const Duration(hours: 1));
   }
@@ -287,6 +291,8 @@ class _AppointmentSheetState extends State<AppointmentSheet> {
     final existing = widget.existing;
     final start = _allDay ? dateOnly(_start) : _start;
     final end = _allDay ? null : _end;
+    // Only a timed appointment can ask for a ride.
+    final ride = _kind == 'appointment' && !_allDay && _needsRide;
     final error = existing == null
         ? await calendar.addAppointment(
             title: title,
@@ -295,6 +301,8 @@ class _AppointmentSheetState extends State<AppointmentSheet> {
             startsAt: start,
             endsAt: end,
             allDay: _allDay,
+            kind: _kind,
+            needsRide: ride,
           )
         : await calendar.editAppointment(
             existing.id,
@@ -305,6 +313,8 @@ class _AppointmentSheetState extends State<AppointmentSheet> {
             endsAt: end,
             clearEnd: end == null,
             allDay: _allDay,
+            kind: _kind,
+            needsRide: ride,
           );
     if (!mounted) return;
     if (error != null) {
@@ -343,10 +353,34 @@ class _AppointmentSheetState extends State<AppointmentSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            editing ? 'Edit appointment' : 'New appointment',
+            editing ? 'Edit $_kind' : 'New $_kind',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<String>(
+              key: const Key('kind-picker'),
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: 'appointment', icon: Icon(Icons.person_rounded, size: 18), label: Text('Appointment')),
+                ButtonSegment(value: 'event', icon: Icon(Icons.celebration_rounded, size: 18), label: Text('Event')),
+              ],
+              selected: {_kind},
+              onSelectionChanged: (v) => setState(() {
+                _kind = v.first;
+                if (_kind == 'event') _needsRide = false;
+              }),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 12, top: 6),
+            child: Text(
+              _kind == 'appointment' ? 'Something you need to be at, like a visit or a meeting.' : 'Anything else you want on your calendar.',
+              key: const Key('kind-hint'),
+              style: const TextStyle(color: Colors.white54, fontSize: 12.5),
+            ),
+          ),
           TextField(
             key: const Key('appointment-title-field'),
             controller: _title,
@@ -440,6 +474,21 @@ class _AppointmentSheetState extends State<AppointmentSheet> {
               prefixIcon: Icon(Icons.notes_rounded),
             ),
           ),
+          if (_kind == 'appointment' && !_allDay) ...[
+            const SizedBox(height: 6),
+            SwitchListTile(
+              key: const Key('appointment-ride-switch'),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              title: const Text('I need a ride'),
+              subtitle: const Text(
+                "Volunteers and admins will see this appointment's name, time and place so someone can offer a ride. Nothing else on your calendar.",
+                style: TextStyle(fontSize: 12.5, height: 1.35),
+              ),
+              secondary: const Icon(Icons.directions_car_rounded, color: Colors.white54),
+              value: _needsRide,
+              onChanged: (v) => setState(() => _needsRide = v),
+            ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(
@@ -451,7 +500,7 @@ class _AppointmentSheetState extends State<AppointmentSheet> {
           const SizedBox(height: 20),
           GradientButton(
             key: const Key('save-appointment'),
-            label: editing ? 'Save changes' : 'Add appointment',
+            label: editing ? 'Save changes' : 'Add $_kind',
             loading: _saving,
             onPressed: _saving || _deleting ? null : _save,
           ),

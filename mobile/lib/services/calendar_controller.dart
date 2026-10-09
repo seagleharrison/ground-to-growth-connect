@@ -120,6 +120,8 @@ class CalendarController extends ChangeNotifier {
     required DateTime startsAt,
     DateTime? endsAt,
     bool allDay = false,
+    String kind = 'appointment',
+    bool needsRide = false,
   }) async {
     if (writeBlocked?.call() == true) return "Switched off while previewing.";
     try {
@@ -130,6 +132,8 @@ class CalendarController extends ChangeNotifier {
         startsAt: startsAt.toUtc().toIso8601String(),
         endsAt: endsAt?.toUtc().toIso8601String(),
         allDay: allDay,
+        kind: kind,
+        needsRide: needsRide,
       );
       _replaceAndSort(created);
       notifyListeners();
@@ -148,6 +152,8 @@ class CalendarController extends ChangeNotifier {
     DateTime? endsAt,
     bool clearEnd = false,
     bool? allDay,
+    String? kind,
+    bool? needsRide,
   }) async {
     if (writeBlocked?.call() == true) return "Switched off while previewing.";
     try {
@@ -159,6 +165,8 @@ class CalendarController extends ChangeNotifier {
         startsAt: startsAt?.toUtc().toIso8601String(),
         endsAt: clearEnd ? '' : endsAt?.toUtc().toIso8601String(),
         allDay: allDay,
+        kind: kind,
+        needsRide: needsRide,
       );
       _replaceAndSort(updated);
       notifyListeners();

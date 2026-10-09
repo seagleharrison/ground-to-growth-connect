@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ground_to_growth_connect/models/models.dart';
+import 'package:ground_to_growth_connect/theme/app_theme.dart';
 import 'package:ground_to_growth_connect/util/calendar_items.dart';
 
 CalendarItem item(String id, DateTime start, {DateTime? end, bool allDay = false}) =>
@@ -130,6 +132,23 @@ void main() {
       final next = layoutDay([item('a', DateTime(2026, 10, 8, 22), end: DateTime(2026, 10, 9, 2))], DateTime(2026, 10, 9));
       expect(next.single.startMin, 0);
       expect(next.single.endMin, 2 * 60);
+    });
+  });
+
+  group('colours say what kind of thing it is', () {
+    Appointment appt(String kind) => Appointment(id: 'a', title: 't', startsAt: '2026-12-01T15:00:00Z', kind: kind, createdAt: '2026-10-01T00:00:00Z');
+
+    test('appointments are orange, their own events lavender, shelter events blue', () {
+      final start = DateTime(2026, 12, 1, 15);
+      final appointment = CalendarItem(id: 'a', title: 't', start: start, appointment: appt('appointment'));
+      final event = CalendarItem(id: 'e', title: 't', start: start, appointment: appt('event'));
+      final shelter = CalendarItem(id: 's', title: 't', start: start);
+      expect(appointment.color, Brand.orange);
+      expect(shelter.color, Brand.blue);
+      expect(event.color, isNot(anyOf(Brand.orange, Brand.blue)));
+      expect(event.isPersonalEvent, isTrue);
+      expect(appointment.isPersonalEvent, isFalse);
+      expect(shelter.isAppointment, isFalse);
     });
   });
 }

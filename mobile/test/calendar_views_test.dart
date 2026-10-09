@@ -193,6 +193,92 @@ void main() {
     });
   });
 
+  group('an appointment or an event, and asking for a ride', () {
+    _withApi('the editor offers both, and an event has no ride', (tester, api) async {
+      await _pump(tester, api);
+      await tester.tap(find.byKey(const Key('add-appointment')));
+      await _settle(tester);
+      expect(find.byKey(const Key('kind-picker')), findsOneWidget);
+      expect(find.text('New appointment'), findsOneWidget);
+      expect(find.byKey(const Key('appointment-ride-switch')), findsOneWidget);
+
+      await tester.tap(find.descendant(of: find.byKey(const Key('kind-picker')), matching: find.text('Event')));
+      await _settle(tester, times: 3);
+      expect(find.text('New event'), findsOneWidget);
+      expect(find.byKey(const Key('appointment-ride-switch')), findsNothing, reason: 'only an appointment can have a ride');
+
+      await tester.enterText(find.byKey(const Key('appointment-title-field')), 'Birthday dinner');
+      await tester.tap(find.byKey(const Key('save-appointment')));
+      await _settle(tester);
+      expect(api.appointments.single['kind'], 'event');
+      expect(api.appointments.single['needsRide'], false);
+      expect(api.helpRequests, isEmpty);
+    });
+
+    _withApi('"I need a ride" puts the ride on the board and says so on the calendar', (tester, api) async {
+      await _pump(tester, api, mode: 'schedule');
+      await tester.tap(find.byKey(const Key('add-appointment')));
+      await _settle(tester);
+      await tester.enterText(find.byKey(const Key('appointment-title-field')), 'DDS visit');
+      await tester.ensureVisible(find.byKey(const Key('appointment-ride-switch')));
+      await tester.tap(find.byKey(const Key('appointment-ride-switch')));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('save-appointment')));
+      await tester.tap(find.byKey(const Key('save-appointment')));
+      await _settle(tester);
+
+      expect(api.appointments.single['kind'], 'appointment');
+      expect(api.appointments.single['needsRide'], true);
+      final ride = api.helpRequests.single;
+      expect(ride['category'], 'ride');
+      expect((ride['appointment'] as Map)['title'], 'DDS visit');
+      expect(find.text('Ride requested · waiting for a volunteer'), findsOneWidget);
+    });
+
+    _withApi('turning the ride off, or deleting the appointment, takes it off the board', (tester, api) async {
+      api.appointments.add({..._appt('a1', 'DDS visit', DateTime(_today.year, _today.month, _today.day, 15)), 'needsRide': true});
+      final state = await _pump(tester, api, mode: 'schedule');
+      state.help.mine = [];
+      api.helpRequests.add({
+        'id': 'h1', 'category': 'ride', 'note': null, 'status': 'open', 'createdAt': DateTime.now().toUtc().toIso8601String(), 'claimedAt': null,
+        'helperName': null, 'appointment': {'id': 'a1', 'title': 'DDS visit', 'location': null, 'startsAt': api.appointments.single['startsAt']},
+        'userId': 'u1', 'name': 'Jane Doe', 'claimedByMe': false,
+      });
+      await tester.tap(find.byKey(const Key('appointment-a1')));
+      await _settle(tester);
+      expect(tester.widget<Switch>(find.descendant(of: find.byKey(const Key('appointment-ride-switch')), matching: find.byType(Switch))).value, true);
+      await tester.tap(find.byKey(const Key('appointment-ride-switch')));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('save-appointment')));
+      await tester.tap(find.byKey(const Key('save-appointment')));
+      await _settle(tester);
+      expect(api.helpRequests, isEmpty, reason: 'no ride any more');
+      expect(api.appointments.single['needsRide'], false);
+    });
+
+    _withApi('an all-day appointment cannot ask for a ride', (tester, api) async {
+      await _pump(tester, api);
+      await tester.tap(find.byKey(const Key('add-appointment')));
+      await _settle(tester);
+      expect(find.byKey(const Key('appointment-ride-switch')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('appointment-allday-switch')));
+      await _settle(tester, times: 3);
+      expect(find.byKey(const Key('appointment-ride-switch')), findsNothing);
+    });
+
+    _withApi('a matched ride shows who is taking you', (tester, api) async {
+      api.appointments.add({..._appt('a1', 'DDS visit', DateTime(_today.year, _today.month, _today.day, 15)), 'needsRide': true});
+      api.helpRequests.add({
+        'id': 'h1', 'category': 'ride', 'note': null, 'status': 'claimed', 'createdAt': DateTime.now().toUtc().toIso8601String(), 'claimedAt': null,
+        'helperName': 'Sam', 'appointment': {'id': 'a1', 'title': 'DDS visit', 'location': null, 'startsAt': api.appointments.single['startsAt']},
+        'userId': 'u1', 'name': 'Jane Doe', 'claimedByMe': false,
+      });
+      await _pump(tester, api, mode: 'schedule');
+      expect(find.text('Sam is taking you'), findsOneWidget);
+      expect(find.text('Ride requested · waiting for a volunteer'), findsNothing);
+    });
+  });
+
   group('Week and Day', () {
     _withApi('the menu switches view, and the choice is remembered', (tester, api) async {
       api.appointments.add(_appt('a1', 'Dentist', DateTime(_today.year, _today.month, _today.day, 15), end: DateTime(_today.year, _today.month, _today.day, 16)));

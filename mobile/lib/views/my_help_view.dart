@@ -5,9 +5,9 @@ import '../app_state.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../util/help_icons.dart';
+import '../util/supply_items.dart';
 import '../util/time.dart';
 import '../widgets/ui.dart';
-import 'calendar_sheets.dart';
 import 'messages_view.dart';
 import 'unsafe_dialog.dart';
 
@@ -133,10 +133,19 @@ class _MyRequestCard extends StatelessWidget {
             children: [
               Icon(r.category.icon, color: Brand.orange),
               const SizedBox(width: 10),
-              Expanded(child: Text(r.category.label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17))),
+              Expanded(
+                child: Text(
+                  r.category == HelpCategory.ride && appt != null ? 'Ride to ${appt.title}' : r.category.label,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                ),
+              ),
               Pill(label: label, color: color),
             ],
           ),
+          if (r.category == HelpCategory.supplies && r.items.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(supplySummary(r.items)[0].toUpperCase() + supplySummary(r.items).substring(1), key: Key('items-${r.id}'), style: const TextStyle(color: Colors.white70, height: 1.4)),
+          ],
           if ((r.note ?? '').isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(r.note!, style: const TextStyle(color: Colors.white70, height: 1.4)),
@@ -208,6 +217,8 @@ String helperStatus(HelpRequest r) {
       return '$who is on the way';
     case 'arrived':
       return '$who has arrived';
+    case 'ready':
+      return '$who has your items ready';
     case 'late':
       return r.progressMinutes == null ? '$who is running late' : '$who is running late (about ${r.progressMinutes} min)';
     default:
@@ -233,6 +244,7 @@ class _AskSheetState extends State<_AskSheet> {
   final _note = TextEditingController();
   HelpCategory? _category;
   String? _appointmentId;
+  final Set<String> _items = {};
   bool _sending = false;
   String? _error;
 
@@ -242,8 +254,8 @@ class _AskSheetState extends State<_AskSheet> {
     super.dispose();
   }
 
-  /// A ride needs an appointment to go to; anything else just needs a category.
-  bool get _canSend => _category != null && (_category != HelpCategory.ride || _appointmentId != null);
+  /// Basic items need at least one thing picked; anything else just needs a category.
+  bool get _canSend => _category != null && (_category != HelpCategory.supplies || _items.isNotEmpty);
 
   Future<void> _send() async {
     final category = _category;
@@ -255,7 +267,8 @@ class _AskSheetState extends State<_AskSheet> {
     final error = await context.read<AppState>().help.ask(
           category: category,
           note: _note.text.trim().isEmpty ? null : _note.text.trim(),
-          appointmentId: _appointmentId,
+          appointmentId: category == HelpCategory.supplies ? null : _appointmentId,
+          items: category == HelpCategory.supplies ? [for (final i in supplyItems) if (_items.contains(i.code)) i.code] : null,
         );
     if (!mounted) return;
     if (error != null) {
@@ -293,7 +306,8 @@ class _AskSheetState extends State<_AskSheet> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final c in HelpCategory.values)
+                  // Rides are asked for on a calendar appointment, not here.
+                  for (final c in [HelpCategory.supplies, ...HelpCategory.values.where((c) => c != HelpCategory.supplies && c != HelpCategory.ride)])
                     ChoiceChip(
                       key: Key('category-${c.wireValue}'),
                       avatar: Icon(c.icon, size: 18),
@@ -312,41 +326,44 @@ class _AskSheetState extends State<_AskSheet> {
                 maxLength: kHelpNoteLimit,
                 decoration: const InputDecoration(labelText: 'A short note (optional)', prefixIcon: Icon(Icons.notes_rounded)),
               ),
-              if (_category == HelpCategory.ride && upcoming.isEmpty) ...[
+              if (_category == HelpCategory.supplies) ...[
                 const SizedBox(height: 6),
-                Container(
-                  key: const Key('ride-needs-appointment'),
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: Brand.surfaceHigh, borderRadius: BorderRadius.circular(16)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('A ride is to something on your calendar, so there is nothing to type. Add the appointment first.', style: TextStyle(height: 1.4, color: Colors.white70)),
-                      const SizedBox(height: 10),
-                      FilledButton.icon(
-                        style: compactFilled,
-                        key: const Key('ride-add-appointment'),
-                        onPressed: () => showAppointmentSheet(context),
-                        icon: const Icon(Icons.event_rounded, size: 18),
-                        label: const Text('Add an appointment'),
-                      ),
-                    ],
-                  ),
+                Text(
+                  _items.isEmpty ? 'Pick what you need' : '${_items.length} picked${_items.length >= kMaxSupplyItems ? ' (the most at once)' : ''}',
+                  key: const Key('items-count'),
+                  style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
                 ),
-              ],
-              if (upcoming.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final i in supplyItems)
+                      FilterChip(
+                        key: Key('item-${i.code}'),
+                        avatar: Icon(i.icon, size: 18),
+                        label: Text(i.label),
+                        selected: _items.contains(i.code),
+                        showCheckmark: false,
+                        onSelected: (on) => setState(() {
+                          if (!on) {
+                            _items.remove(i.code);
+                          } else if (_items.length < kMaxSupplyItems) {
+                            _items.add(i.code);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+              ] else if (upcoming.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String?>(
                   key: const Key('help-appointment-field'),
                   initialValue: _appointmentId,
                   isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: _category == HelpCategory.ride ? 'Which appointment is the ride to?' : 'Need to get to an appointment? (optional)',
-                    prefixIcon: const Icon(Icons.event_rounded),
-                  ),
+                  decoration: const InputDecoration(labelText: 'Is this for an appointment? (optional)', prefixIcon: Icon(Icons.event_rounded)),
                   items: [
-                    if (_category != HelpCategory.ride) const DropdownMenuItem<String?>(value: null, child: Text('No appointment')),
+                    const DropdownMenuItem<String?>(value: null, child: Text('No appointment')),
                     for (final a in upcoming)
                       DropdownMenuItem<String?>(
                         value: a.id,
@@ -356,10 +373,18 @@ class _AskSheetState extends State<_AskSheet> {
                   onChanged: (v) => setState(() => _appointmentId = v),
                 ),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               const Text(
-                'Volunteers and staff will see this request and your name. If you pick an appointment, they see that one only — nothing else on your calendar. Ground to Growth staff may review messages to keep everyone safe.',
+                'Need a ride? Add the appointment to your Calendar and turn on "I need a ride".',
+                key: Key('ride-hint'),
                 style: TextStyle(color: Colors.white54, fontSize: 12.5, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _category == HelpCategory.supplies
+                    ? 'Volunteers and staff will see what you ask for and your name. Ground to Growth staff may review messages to keep everyone safe.'
+                    : 'Volunteers and staff will see this request and your name. If you pick an appointment, they see that one only — nothing else on your calendar. Ground to Growth staff may review messages to keep everyone safe.',
+                style: const TextStyle(color: Colors.white54, fontSize: 12.5, height: 1.4),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 10),

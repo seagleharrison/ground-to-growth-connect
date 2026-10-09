@@ -7,6 +7,7 @@ import '../app_state.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../util/help_icons.dart';
+import '../util/supply_items.dart';
 import '../util/time.dart';
 import '../widgets/ui.dart';
 import 'messages_view.dart';
@@ -68,8 +69,8 @@ class _HelpBoardViewState extends State<HelpBoardView> {
           padding: const EdgeInsets.only(left: 4, bottom: 14),
           child: Text(
             isAdmin
-                ? 'What people have asked for. When volunteers offer to help, confirm the match here, and the person is told someone is coming.'
-                : 'What people have asked for. Tap "I can help" to offer. An admin confirms each match, then your steps (on my way, arrived, done) show up here.',
+                ? 'What people have asked for, rides first. Anyone can accept one, and the person is told someone is coming.'
+                : 'What people have asked for, rides first. Accept one and the person is told someone is coming, then tap each step as you go.',
             style: const TextStyle(color: Colors.white60, height: 1.4),
           ),
         ),
@@ -114,9 +115,6 @@ class _HelpBoardViewState extends State<HelpBoardView> {
               onClaim: () => _run(() => help.claim(r.id)),
               onRelease: () => _run(() => help.release(r.id)),
               onFinish: () => _run(() => help.finish(r.id)),
-              onApprove: (o) => _run(() => help.approveOffer(o.id)),
-              onDecline: (o) => _run(() => help.declineOffer(o.id)),
-              onWithdraw: () => _run(() => help.withdrawOffer(r.id, r.myOfferId ?? '')),
               onProgress: (kind, {minutes}) => _run(() => help.progress(r.id, kind, minutes: minutes)),
               onUnsafe: () async {
                 final confirmed = await showUnsafeDialog(context, byVolunteer: true);
@@ -139,6 +137,9 @@ class _HelpBoardViewState extends State<HelpBoardView> {
   }
 }
 
+/// One request on the board. The one thing to do next is the big button;
+/// everything else sits in the menu, except the safety button, which is
+/// always in view while someone is on a match.
 class _BoardCard extends StatelessWidget {
   final HelpRequest request;
   final bool isAdmin;
@@ -147,9 +148,6 @@ class _BoardCard extends StatelessWidget {
   final VoidCallback onFinish;
   final VoidCallback onMessage;
   final bool canMessage;
-  final ValueChanged<HelpOffer> onApprove;
-  final ValueChanged<HelpOffer> onDecline;
-  final VoidCallback onWithdraw;
   final void Function(String kind, {int? minutes}) onProgress;
   final VoidCallback onUnsafe;
 
@@ -161,18 +159,25 @@ class _BoardCard extends StatelessWidget {
     required this.onFinish,
     required this.onMessage,
     required this.canMessage,
-    required this.onApprove,
-    required this.onDecline,
-    required this.onWithdraw,
     required this.onProgress,
     required this.onUnsafe,
   });
+
+  String get _claimLabel => switch (request.category) {
+        HelpCategory.ride => 'I can give this ride',
+        HelpCategory.supplies => 'I can bring these',
+        _ => 'I can help',
+      };
 
   @override
   Widget build(BuildContext context) {
     final r = request;
     final appt = r.appointment;
     final mine = r.claimedByMe;
+    final isRide = r.category == HelpCategory.ride;
+    final title = isRide && appt != null ? 'Ride to ${appt.title}' : r.category.label;
+    final hasMenu = mine || (isAdmin && (canMessage || (r.isClaimed && !mine)));
+
     return AppCard(
       key: Key('help-${r.id}'),
       child: Column(
@@ -191,16 +196,34 @@ class _BoardCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(r.category.label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
                     Text('${r.name ?? 'Someone'} · ${timeAgo(r.createdAtLocal)}', style: const TextStyle(color: Colors.white54, fontSize: 13)),
                   ],
                 ),
               ),
-              if (r.isClaimed)
-                Pill(label: mine ? _myStatus(r) : '${r.helperName ?? 'A volunteer'} is helping', color: Brand.green),
-              if (r.isOpen && r.hasMyOffer) const Pill(key: Key('offer-waiting'), label: 'Waiting for the team', color: Brand.amber),
+              if (hasMenu) _Menu(request: r, isAdmin: isAdmin, mine: mine, canMessage: canMessage, onMessage: onMessage, onRelease: onRelease, onProgress: onProgress),
             ],
           ),
+          if (r.isClaimed) ...[
+            const SizedBox(height: 10),
+            Align(alignment: Alignment.centerLeft, child: Pill(label: mine ? _myStatus(r) : _theirStatus(r), color: Brand.green)),
+          ],
+          if (r.category == HelpCategory.supplies && r.items.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              key: Key('items-${r.id}'),
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final code in r.items)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    avatar: Icon(supplyItems.where((i) => i.code == code).firstOrNull?.icon ?? Icons.inventory_2_rounded, size: 16, color: Brand.orange),
+                    label: Text(supplyLabel(code)),
+                  ),
+              ],
+            ),
+          ],
           if ((r.note ?? '').isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(r.note!, style: const TextStyle(height: 1.4, fontSize: 15)),
@@ -233,103 +256,101 @@ class _BoardCard extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 14),
-          if (r.isOpen && isAdmin && r.offers.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text('Volunteers offering to help', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white70)),
+          if (r.isOpen) ...[
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              key: Key('claim-${r.id}'),
+              onPressed: onClaim,
+              icon: const Icon(Icons.volunteer_activism_rounded, size: 18),
+              label: Text(_claimLabel),
             ),
-            for (final o in r.offers)
-              Container(
-                key: Key('offer-${o.id}'),
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Brand.surfaceHigh, borderRadius: BorderRadius.circular(14)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: Text(o.volunteerName, style: const TextStyle(fontWeight: FontWeight.w800))),
-                        const Icon(Icons.thumb_up_alt_outlined, size: 16, color: Brand.green),
-                        const SizedBox(width: 4),
-                        Text('${o.thumbsUp}', style: const TextStyle(color: Colors.white70)),
-                        const SizedBox(width: 12),
-                        const Icon(Icons.thumb_down_alt_outlined, size: 16, color: Brand.red),
-                        const SizedBox(width: 4),
-                        Text('${o.thumbsDown}', style: const TextStyle(color: Colors.white70)),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton(style: compactFilled, key: Key('approve-offer-${o.id}'), onPressed: () => onApprove(o), child: const Text('Confirm')),
-                        OutlinedButton(style: compactOutlined, key: Key('decline-offer-${o.id}'), onPressed: () => onDecline(o), child: const Text('Not this one')),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
           ],
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            children: [
-              if (r.isOpen && !r.hasMyOffer)
-                FilledButton.icon(
-                  style: compactFilled,
-                  key: Key('claim-${r.id}'),
-                  onPressed: onClaim,
-                  icon: const Icon(Icons.volunteer_activism_rounded, size: 18),
-                  label: Text(isAdmin ? "I'll take it" : (r.category == HelpCategory.ride ? 'I can give a ride' : 'I can help')),
-                ),
-              if (r.isOpen && r.hasMyOffer)
-                OutlinedButton(style: compactOutlined, key: Key('withdraw-${r.id}'), onPressed: onWithdraw, child: const Text('Take back my offer')),
-              if (canMessage)
-                FilledButton.icon(
-                  style: compactFilled,
-                  key: Key('message-${r.id}'),
-                  onPressed: onMessage,
-                  icon: const Icon(Icons.chat_bubble_rounded, size: 18),
-                  label: Text(isAdmin ? 'Message ${r.name ?? 'them'}' : 'Message the team'),
-                ),
-              if (mine) ...[
+          if (mine) ...[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
                 // The next step, one tap: on my way, then I've arrived, then Done.
-                if (r.progress == null)
-                  FilledButton(style: compactFilled, key: Key('step-on-my-way-${r.id}'), onPressed: () => onProgress('on_my_way'), child: const Text('On my way')),
-                if (r.progress == 'on_my_way' || r.progress == 'late')
-                  FilledButton(style: compactFilled, key: Key('step-arrived-${r.id}'), onPressed: () => onProgress('arrived'), child: const Text("I've arrived")),
+                if (r.category == HelpCategory.supplies) ...[
+                  if (r.progress != 'ready')
+                    FilledButton(style: compactFilled, key: Key('step-ready-${r.id}'), onPressed: () => onProgress('ready'), child: const Text("They're ready")),
+                ] else ...[
+                  if (r.progress == null)
+                    FilledButton(style: compactFilled, key: Key('step-on-my-way-${r.id}'), onPressed: () => onProgress('on_my_way'), child: const Text('On my way')),
+                  if (r.progress == 'on_my_way' || r.progress == 'late')
+                    FilledButton(style: compactFilled, key: Key('step-arrived-${r.id}'), onPressed: () => onProgress('arrived'), child: const Text("I've arrived")),
+                ],
                 OutlinedButton(style: compactOutlined, key: Key('finish-${r.id}'), onPressed: onFinish, child: const Text('Done')),
-                if (r.progress != 'arrived')
-                  PopupMenuButton<int>(
-                    key: Key('late-${r.id}'),
-                    color: Brand.surfaceHigh,
-                    tooltip: 'Running late',
-                    onSelected: (m) => onProgress('running_late', minutes: m),
-                    itemBuilder: (context) => [
-                      for (final m in const [10, 20, 30, 45, 60]) PopupMenuItem(key: Key('late-${r.id}-$m'), value: m, child: Text('About $m minutes late')),
-                    ],
-                    child: IgnorePointer(
-                      child: OutlinedButton.icon(style: compactOutlined, onPressed: () {}, icon: const Icon(Icons.schedule_rounded, size: 18), label: const Text('Running late')),
-                    ),
-                  ),
-                OutlinedButton(style: compactOutlined, key: Key('cant-make-it-${r.id}'), onPressed: () => onProgress('cant_make_it'), child: const Text("Can't make it")),
-                OutlinedButton(
+                TextButton(
                   key: Key('unsafe-${r.id}'),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44), foregroundColor: Brand.red, side: const BorderSide(color: Brand.red)),
+                  style: TextButton.styleFrom(foregroundColor: Brand.red, minimumSize: const Size(0, 44)),
                   onPressed: onUnsafe,
                   child: const Text("I don't feel safe"),
                 ),
               ],
-              if (!mine && isAdmin && r.isClaimed)
-                OutlinedButton(style: compactOutlined, key: Key('free-${r.id}'), onPressed: onRelease, child: const Text('Free up')),
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );
+  }
+}
+
+/// The less-used actions, out of the way.
+class _Menu extends StatelessWidget {
+  final HelpRequest request;
+  final bool isAdmin;
+  final bool mine;
+  final bool canMessage;
+  final VoidCallback onMessage;
+  final VoidCallback onRelease;
+  final void Function(String kind, {int? minutes}) onProgress;
+  const _Menu({required this.request, required this.isAdmin, required this.mine, required this.canMessage, required this.onMessage, required this.onRelease, required this.onProgress});
+
+  @override
+  Widget build(BuildContext context) {
+    final r = request;
+    final isRide = r.category == HelpCategory.ride;
+    return PopupMenuButton<String>(
+      key: Key('more-${r.id}'),
+      color: Brand.surfaceHigh,
+      tooltip: 'More',
+      onSelected: (v) {
+        if (v == 'message') {
+          onMessage();
+        } else if (v == 'free') {
+          onRelease();
+        } else if (v == 'cant') {
+          onProgress('cant_make_it');
+        } else if (v.startsWith('late-')) {
+          onProgress('running_late', minutes: int.parse(v.substring(5)));
+        }
+      },
+      itemBuilder: (context) => [
+        if (mine && isRide && r.progress != 'arrived')
+          for (final m in const [10, 20, 30, 60]) PopupMenuItem(key: Key('late-${r.id}-$m'), value: 'late-$m', child: Text('Running about $m min late')),
+        if (mine) PopupMenuItem(key: Key('cant-make-it-${r.id}'), value: 'cant', child: const Text("Can't make it")),
+        if (canMessage) PopupMenuItem(key: Key('message-${r.id}'), value: 'message', child: Text(isAdmin ? 'Message ${r.name ?? 'them'}' : 'Message the team')),
+        if (!mine && isAdmin && r.isClaimed) PopupMenuItem(key: Key('free-${r.id}'), value: 'free', child: const Text('Free up')),
+      ],
+    );
+  }
+}
+
+/// What the person's request shows for someone else's match (admins).
+String _theirStatus(HelpRequest r) {
+  final who = r.helperName ?? 'A volunteer';
+  switch (r.progress) {
+    case 'on_my_way':
+      return '$who is on the way';
+    case 'arrived':
+      return '$who has arrived';
+    case 'ready':
+      return '$who has them ready';
+    default:
+      return '$who is helping';
   }
 }
 
@@ -340,6 +361,8 @@ String _myStatus(HelpRequest r) {
       return "You're on your way";
     case 'arrived':
       return "You've arrived";
+    case 'ready':
+      return 'Ready for pickup';
     case 'late':
       return r.progressMinutes == null ? "You're running late" : "You're running late (~${r.progressMinutes} min)";
     default:

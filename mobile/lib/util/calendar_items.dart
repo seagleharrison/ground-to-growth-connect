@@ -49,8 +49,9 @@ class CalendarItem {
   final bool allDay;
   final String? location;
   final String? notes; // an appointment's notes, or an event's description
-  final Appointment? appointment; // non-null only for a personal appointment
+  final Appointment? appointment; // non-null only for a personal appointment or event
   final String? helper; // first name of a volunteer taking them there
+  final HelpRequest? ride; // the ride asked for this appointment, if any
 
   const CalendarItem({
     required this.id,
@@ -62,9 +63,14 @@ class CalendarItem {
     this.notes,
     this.appointment,
     this.helper,
+    this.ride,
   });
 
+  /// One of the person's own things (an appointment or an event), as opposed
+  /// to a shelter or program event.
   bool get isAppointment => appointment != null;
+  bool get isPersonalEvent => appointment?.isEvent == true;
+  bool get needsRide => appointment?.needsRide == true;
 
   /// Something with no end time still takes up a visible hour on a time grid.
   DateTime get effectiveEnd => allDay ? addDays(dateOnly(start), 1) : (end ?? start.add(const Duration(hours: 1)));
@@ -80,14 +86,16 @@ class CalendarItem {
   /// Something spanning a whole day or more is shown in the "all-day" strip.
   bool get showsAsAllDay => allDay || effectiveEnd.difference(start) >= const Duration(hours: 24);
 
-  Color get color => isAppointment ? Brand.orange : Brand.blue;
-  Color get onColor => isAppointment ? const Color(0xFF3A1D00) : const Color(0xFF06223F);
+  /// Appointments are orange, the person's own events lavender, shelter events blue.
+  Color get color => isPersonalEvent ? const Color(0xFFB9A2FF) : (isAppointment ? Brand.orange : Brand.blue);
+  Color get onColor => isPersonalEvent ? const Color(0xFF241447) : (isAppointment ? const Color(0xFF3A1D00) : const Color(0xFF06223F));
 }
 
 List<CalendarItem> buildCalendarItems(
   CalendarEventsContent? content,
   List<Appointment> appointments, {
   String? Function(String appointmentId)? helperFor,
+  HelpRequest? Function(String appointmentId)? rideFor,
 }) {
   final items = <CalendarItem>[
     for (final e in content?.events ?? const <CalendarEventInfo>[])
@@ -103,6 +111,7 @@ List<CalendarItem> buildCalendarItems(
         notes: a.notes,
         appointment: a,
         helper: helperFor?.call(a.id),
+        ride: rideFor?.call(a.id),
       ),
   ];
   items.sort(compareItems);
