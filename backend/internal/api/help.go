@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -14,7 +15,7 @@ import (
 	"ground-to-growth-connect-backend/internal/push"
 )
 
-var helpCategories = []string{"food", "shelter", "ride", "documents", "clothing", "health", "work", "other"}
+var helpCategories = []string{"food", "shelter", "ride", "documents", "clothing", "health", "work", "other", "supplies"}
 
 const (
 	maxHelpNoteRunes     = 140
@@ -39,7 +40,9 @@ type helpRequestJSON struct {
 	ClaimedAt   *string              `json:"claimedAt"`
 	HelperName  *string              `json:"helperName"`
 	Appointment *helpAppointmentJSON `json:"appointment"`
-	// Where a match is up to, from the helper's taps: on_my_way | arrived | late.
+	// A "supplies" request lists the basic items asked for (codes from supplyItems).
+	Items []string `json:"items,omitempty"`
+	// Where a match is up to, from the helper's taps: on_my_way | arrived | late | ready.
 	Progress        *string `json:"progress"`
 	ProgressAt      *string `json:"progressAt"`
 	ProgressMinutes *int    `json:"progressMinutes"`
@@ -54,18 +57,13 @@ type staffHelpRequestJSON struct {
 	UserID      string `json:"userId"`
 	Name        string `json:"name"`
 	ClaimedByMe bool   `json:"claimedByMe"`
-	// A volunteer's own offer on this request, while an admin hasn't confirmed it.
-	MyOffer   *string `json:"myOffer"`
-	MyOfferID *string `json:"myOfferId"`
-	// For admins: the volunteers waiting to be confirmed on an open request.
-	Offers []offerJSON `json:"offers,omitempty"`
 }
 
 const helpRequestSelect = `
 	SELECT hr.id, hr.user_id, u.name_encrypted, hr.category, hr.note_encrypted, hr.status,
 	       hr.created_at, hr.claimed_at, hr.claimed_by, h.name_encrypted,
 	       a.id, a.title_encrypted, a.location_encrypted, a.starts_at,
-	       hr.progress, hr.progress_at, hr.progress_minutes, hr.rating
+	       hr.progress, hr.progress_at, hr.progress_minutes, hr.rating, hr.items
 	FROM help_requests hr
 	JOIN users u ON u.id = hr.user_id
 	LEFT JOIN users h ON h.id = hr.claimed_by
@@ -83,17 +81,25 @@ func scanHelpRequest(row interface {
 }, viewerID string) (staffHelpRequestJSON, error) {
 	var r staffHelpRequestJSON
 	var nameEnc, noteEnc, helperEnc, apptTitleEnc, apptLocEnc []byte
-	var claimedAt, claimedBy, apptID, apptStarts, progress, progressAt sql.NullString
+	var claimedAt, claimedBy, apptID, apptStarts, progress, progressAt, itemsJSON sql.NullString
 	var progressMinutes, rating sql.NullInt64
 	if err := row.Scan(&r.ID, &r.UserID, &nameEnc, &r.Category, &noteEnc, &r.Status,
 		&r.CreatedAt, &claimedAt, &claimedBy, &helperEnc,
 		&apptID, &apptTitleEnc, &apptLocEnc, &apptStarts,
-		&progress, &progressAt, &progressMinutes, &rating); err != nil {
+		&progress, &progressAt, &progressMinutes, &rating, &itemsJSON); err != nil {
 		return r, err
 	}
 	if rating.Valid {
 		v := int(rating.Int64)
 		r.Rating = &v
+	}
+	// A request with items is a supplies request, however it is stored.
+	if itemsJSON.Valid && itemsJSON.String != "" {
+		var items []string
+		if json.Unmarshal([]byte(itemsJSON.String), &items) == nil && len(items) > 0 {
+			r.Items = items
+			r.Category = "supplies"
+		}
 	}
 	name, err := cryptox.DecryptString(nameEnc)
 	if err != nil {
@@ -180,9 +186,10 @@ func (s *Server) loadHelpRequest(viewerID, id string) (*staffHelpRequestJSON, er
 }
 
 type createHelpRequest struct {
-	Category      string  `json:"category"`
-	Note          *string `json:"note"`
-	AppointmentID *string `json:"appointmentId"`
+	Category      string   `json:"category"`
+	Note          *string  `json:"note"`
+	AppointmentID *string  `json:"appointmentId"`
+	Items         []string `json:"items"`
 }
 
 func (s *Server) handleCreateHelpRequest(w http.ResponseWriter, r *http.Request) {
@@ -200,6 +207,20 @@ func (s *Server) handleCreateHelpRequest(w http.ResponseWriter, r *http.Request)
 	note := trimmedOrNil(body.Note)
 	if note != nil && utf8.RuneCountInString(*note) > maxHelpNoteRunes {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("Keep the note short: up to %d characters.", maxHelpNoteRunes))
+		return
+	}
+	// Basic items are picked from a list, never typed.
+	var itemsArg interface{}
+	if body.Category == "supplies" {
+		items, problem := cleanSupplyItems(body.Items)
+		if problem != "" {
+			writeError(w, http.StatusBadRequest, problem)
+			return
+		}
+		raw, _ := json.Marshal(items)
+		itemsArg = string(raw)
+	} else if len(body.Items) > 0 {
+		writeError(w, http.StatusBadRequest, "Items can only be asked for in a supplies request.")
 		return
 	}
 	// A ride is always to something on the calendar, so nobody has to type
@@ -224,26 +245,17 @@ func (s *Server) handleCreateHelpRequest(w http.ResponseWriter, r *http.Request)
 		apptArg = *body.AppointmentID
 	}
 
-	var active int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM help_requests WHERE user_id = ? AND status != 'done'`, u.ID).Scan(&active); err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if active >= maxActiveHelpPerUser {
-		writeError(w, http.StatusConflict, "You already have several open requests. Mark some as done first.")
-		return
-	}
-
 	noteEnc, err := cryptox.EncryptString(note)
 	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
-	var id string
-	if err := s.db.QueryRow(
-		`INSERT INTO help_requests (user_id, category, note_encrypted, appointment_id) VALUES (?, ?, ?, ?) RETURNING id`,
-		u.ID, body.Category, noteEnc, apptArg,
-	).Scan(&id); err != nil {
+	id, err := s.insertHelpRequest(u.ID, body.Category, noteEnc, apptArg, itemsArg)
+	if err == errTooManyRequests {
+		writeError(w, http.StatusConflict, "You already have several open requests. Mark some as done first.")
+		return
+	}
+	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
@@ -252,19 +264,47 @@ func (s *Server) handleCreateHelpRequest(w http.ResponseWriter, r *http.Request)
 		writeInternalError(w, err)
 		return
 	}
-	// Tell the people who can act. Volunteers this person blocked aren't told.
+	writeJSON(w, http.StatusCreated, map[string]interface{}{"request": req.helpRequestJSON})
+}
+
+var errTooManyRequests = errors.New("too many open requests")
+
+// insertHelpRequest saves a request and tells the staff who can act on it.
+// Volunteers this person blocked aren't told.
+func (s *Server) insertHelpRequest(ownerID, category string, noteEnc []byte, apptArg, itemsArg interface{}) (string, error) {
+	var active int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM help_requests WHERE user_id = ? AND status != 'done'`, ownerID).Scan(&active); err != nil {
+		return "", err
+	}
+	if active >= maxActiveHelpPerUser {
+		return "", errTooManyRequests
+	}
+	var id string
+	if err := s.db.QueryRow(
+		`INSERT INTO help_requests (user_id, category, note_encrypted, appointment_id, items) VALUES (?, ?, ?, ?, ?) RETURNING id`,
+		ownerID, storedCategory(category), noteEnc, apptArg, itemsArg,
+	).Scan(&id); err != nil {
+		return "", err
+	}
 	var targets []string
 	for _, staffID := range s.staffToNotify() {
-		if blocked, _ := s.isBlocked(u.ID, staffID); !blocked && staffID != u.ID {
+		if blocked, _ := s.isBlocked(ownerID, staffID); !blocked && staffID != ownerID {
 			targets = append(targets, staffID)
 		}
 	}
+	body := "Someone asked for help. Open the Help tab to see."
+	switch category {
+	case "ride":
+		body = "Someone needs a ride. Open the Help tab to see."
+	case "supplies":
+		body = "Someone asked for basic items. Open the Help tab to see."
+	}
 	s.notifyUsers(targets, push.Notification{
 		Title: "New request for help",
-		Body:  "Someone asked for help. Open the Help tab to see.",
+		Body:  body,
 		Data:  map[string]string{"kind": "help"},
 	})
-	writeJSON(w, http.StatusCreated, map[string]interface{}{"request": req.helpRequestJSON})
+	return id, nil
 }
 
 func (s *Server) handleMyHelpRequests(w http.ResponseWriter, r *http.Request) {
@@ -304,11 +344,25 @@ func (s *Server) handleHelpBoard(w http.ResponseWriter, r *http.Request) {
 			return 2
 		}
 	}
-	sort.SliceStable(rs, func(i, j int) bool { return rank(rs[i]) < rank(rs[j]) })
-	if err := s.attachOffers(rs, viewer); err != nil {
-		writeInternalError(w, err)
-		return
+	// Mine first, then what's still open, and within each: rides, soonest
+	// appointment first, then everything else by how long it has waited.
+	soonest := func(x staffHelpRequestJSON) string {
+		if x.Category == "ride" && x.Appointment != nil {
+			return x.Appointment.StartsAt
+		}
+		return ""
 	}
+	sort.SliceStable(rs, func(i, j int) bool {
+		if ri, rj := rank(rs[i]), rank(rs[j]); ri != rj {
+			return ri < rj
+		}
+		ai, aj := soonest(rs[i]), soonest(rs[j])
+		if (ai != "") != (aj != "") {
+			return ai != ""
+		}
+		return ai != "" && ai < aj
+	})
+	hideRatingsFromVolunteers(rs, viewer)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"requests": rs})
 }
 
@@ -324,24 +378,20 @@ func (s *Server) respondStaffHelpRequest(w http.ResponseWriter, viewerID, id str
 	}
 	one := []staffHelpRequestJSON{*req}
 	if viewer, err := s.loadPerson(viewerID); err == nil && viewer != nil {
-		_ = s.attachOffers(one, &authUser{ID: viewerID, PersonType: viewer.Type})
+		hideRatingsFromVolunteers(one, &authUser{ID: viewerID, PersonType: viewer.Type})
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"request": one[0]})
 }
 
 func nowStamp() string { return time.Now().UTC().Format("2006-01-02T15:04:05.000Z") }
 
-// handleClaimHelpRequest is "I can help". For a volunteer that is an offer an
-// admin must confirm; an admin can take a request on directly.
+// handleClaimHelpRequest is "I can help": an approved volunteer or an admin
+// accepts the request, and the person is told someone is coming.
 func (s *Server) handleClaimHelpRequest(w http.ResponseWriter, r *http.Request) {
 	u := userFromCtx(r)
 	id := r.PathValue("id")
 	if u.MessagingDisabled {
 		writeError(w, http.StatusForbidden, "Your volunteer account is paused. Please contact Ground to Growth.")
-		return
-	}
-	if u.PersonType != "admin" {
-		s.offerHelp(w, u, id)
 		return
 	}
 	res, err := s.db.Exec(

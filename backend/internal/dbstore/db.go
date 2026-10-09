@@ -42,6 +42,8 @@ var columnsAddedAfterV1 = []struct{ table, column, definition string }{
 	{"users", "messaging_disabled", "INTEGER NOT NULL DEFAULT 0"},
 	{"appointments", "ends_at", "TEXT"},
 	{"appointments", "all_day", "INTEGER NOT NULL DEFAULT 0"},
+	{"appointments", "kind", "TEXT NOT NULL DEFAULT 'appointment'"},
+	{"help_requests", "items", "TEXT"},
 	{"help_requests", "progress", "TEXT"},
 	{"help_requests", "progress_at", "TEXT"},
 	{"help_requests", "progress_minutes", "INTEGER"},

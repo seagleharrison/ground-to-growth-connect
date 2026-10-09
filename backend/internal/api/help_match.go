@@ -9,24 +9,12 @@ import (
 	"ground-to-growth-connect-backend/internal/push"
 )
 
-// Matching a volunteer to a request, and the taps that follow, without any
+// What happens after a volunteer (or admin) accepts a request, without any
 // typing between the two of them:
 //
-//	volunteer "I can help"  -> an offer
-//	admin approves          -> the match (the person is told someone is coming)
 //	taps                    -> on my way, arrived, running late, can't make it,
 //	                           "I don't feel safe", done
 //	person rates it         -> thumbs up or down, seen by admins only
-
-// offerJSON is what an admin sees about a volunteer waiting to be confirmed.
-type offerJSON struct {
-	ID            string `json:"id"`
-	VolunteerID   string `json:"volunteerId"`
-	VolunteerName string `json:"volunteerName"`
-	CreatedAt     string `json:"createdAt"`
-	ThumbsUp      int    `json:"thumbsUp"`
-	ThumbsDown    int    `json:"thumbsDown"`
-}
 
 // volunteerRatings counts the thumbs a volunteer has earned.
 func (s *Server) volunteerRatings(volunteerID string) (up, down int) {
@@ -37,215 +25,19 @@ func (s *Server) volunteerRatings(volunteerID string) (up, down int) {
 	return up, down
 }
 
-// attachOffers fills in each request's offers for the viewer: an admin sees
-// who is waiting to be confirmed, a volunteer sees whether their own offer is
-// still waiting. Ratings are for admins only.
-func (s *Server) attachOffers(rs []staffHelpRequestJSON, viewer *authUser) error {
-	rows, err := s.db.Query(
-		`SELECT o.id, o.request_id, o.volunteer_id, u.name_encrypted, o.created_at
-		 FROM help_offers o JOIN users u ON u.id = o.volunteer_id
-		 WHERE o.status = 'pending' ORDER BY o.created_at ASC`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	byRequest := map[string][]offerJSON{}
-	mine := map[string]string{}
-	for rows.Next() {
-		var o offerJSON
-		var requestID string
-		var nameEnc []byte
-		if err := rows.Scan(&o.ID, &requestID, &o.VolunteerID, &nameEnc, &o.CreatedAt); err != nil {
-			return err
-		}
-		name, err := cryptox.DecryptString(nameEnc)
-		if err != nil {
-			return err
-		}
-		if name != nil {
-			o.VolunteerName = *name
-		}
-		byRequest[requestID] = append(byRequest[requestID], o)
-		if o.VolunteerID == viewer.ID {
-			mine[requestID] = o.ID
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
+// hideRatingsFromVolunteers keeps how a match was rated between the person
+// and the admins: a volunteer never sees ratings, their own or anyone's.
+func hideRatingsFromVolunteers(rs []staffHelpRequestJSON, viewer *authUser) {
+	if viewer.PersonType == "admin" {
+		return
 	}
 	for i := range rs {
-		r := &rs[i]
-		if viewer.PersonType == "admin" {
-			offers := byRequest[r.ID]
-			for j := range offers {
-				offers[j].ThumbsUp, offers[j].ThumbsDown = s.volunteerRatings(offers[j].VolunteerID)
-			}
-			r.Offers = offers
-		} else {
-			r.Rating = nil
-		}
-		if offerID, ok := mine[r.ID]; ok {
-			pending := "pending"
-			r.MyOffer = &pending
-			id := offerID
-			r.MyOfferID = &id
-		}
+		rs[i].Rating = nil
 	}
-	return nil
 }
 
 func (s *Server) logHelpEvent(requestID, actorID, kind string) {
 	_, _ = s.db.Exec(`INSERT INTO help_events (request_id, actor_id, kind) VALUES (?, ?, ?)`, requestID, actorID, kind)
-}
-
-// offerHelp records a volunteer's "I can help" and tells the admins.
-func (s *Server) offerHelp(w http.ResponseWriter, u *authUser, id string) {
-	req, err := s.loadHelpRequest(u.ID, id)
-	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if req == nil {
-		writeError(w, http.StatusNotFound, "Not found")
-		return
-	}
-	if blocked, err := s.isBlocked(req.UserID, u.ID); err != nil {
-		writeInternalError(w, err)
-		return
-	} else if blocked {
-		writeError(w, http.StatusNotFound, "Not found")
-		return
-	}
-	if req.ClaimedByMe {
-		s.respondStaffHelpRequest(w, u.ID, id) // already matched: nothing to do
-		return
-	}
-	if req.Status != "open" {
-		writeError(w, http.StatusConflict, "Someone else is already helping with this.")
-		return
-	}
-	var pending int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM help_offers WHERE request_id = ? AND volunteer_id = ? AND status = 'pending'`, id, u.ID).Scan(&pending); err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if pending == 0 {
-		if _, err := s.db.Exec(`INSERT INTO help_offers (request_id, volunteer_id) VALUES (?, ?)`, id, u.ID); err != nil {
-			writeInternalError(w, err)
-			return
-		}
-		s.notifyUsers(s.adminIDsExcept(u.ID), push.Notification{
-			Title: "A volunteer offered to help",
-			Body:  "Open the Help tab to confirm the match.",
-			Data:  map[string]string{"kind": "help-offer"},
-		})
-	}
-	s.respondStaffHelpRequest(w, u.ID, id)
-}
-
-func (s *Server) handleWithdrawOffer(w http.ResponseWriter, r *http.Request) {
-	u := userFromCtx(r)
-	res, err := s.db.Exec(
-		`UPDATE help_offers SET status = 'withdrawn', decided_at = ? WHERE id = ? AND volunteer_id = ? AND status = 'pending'`,
-		nowStamp(), r.PathValue("id"), u.ID)
-	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		writeError(w, http.StatusNotFound, "Not found")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
-func (s *Server) handleApproveOffer(w http.ResponseWriter, r *http.Request) {
-	admin := userFromCtx(r)
-	offerID := r.PathValue("id")
-	var requestID, volunteerID, status string
-	err := s.db.QueryRow(`SELECT request_id, volunteer_id, status FROM help_offers WHERE id = ?`, offerID).Scan(&requestID, &volunteerID, &status)
-	if err == sql.ErrNoRows {
-		writeError(w, http.StatusNotFound, "Not found")
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if status != "pending" {
-		writeError(w, http.StatusConflict, "That offer was already handled.")
-		return
-	}
-	vol, err := s.loadPerson(volunteerID)
-	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if vol == nil || vol.Type != "volunteer" || !vol.Approved || vol.Disabled {
-		writeError(w, http.StatusConflict, "That volunteer can't take this right now.")
-		return
-	}
-	res, err := s.db.Exec(
-		`UPDATE help_requests SET status = 'claimed', claimed_by = ?, claimed_at = ?, progress = NULL, progress_at = NULL, progress_minutes = NULL
-		 WHERE id = ? AND (status = 'open' OR (status = 'claimed' AND claimed_by IS NULL))
-		   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = help_requests.user_id AND b.blocked_id = ?)`,
-		volunteerID, nowStamp(), requestID, volunteerID)
-	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		writeError(w, http.StatusConflict, "This request isn't open any more.")
-		return
-	}
-	stamp := nowStamp()
-	if _, err := s.db.Exec(`UPDATE help_offers SET status = 'approved', decided_at = ?, decided_by = ? WHERE id = ?`, stamp, admin.ID, offerID); err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if _, err := s.db.Exec(`UPDATE help_offers SET status = 'declined', decided_at = ?, decided_by = ? WHERE request_id = ? AND status = 'pending'`, stamp, admin.ID, requestID); err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	s.logHelpEvent(requestID, admin.ID, "matched")
-	var ownerID string
-	if err := s.db.QueryRow(`SELECT user_id FROM help_requests WHERE id = ?`, requestID).Scan(&ownerID); err == nil {
-		s.notifyUser(ownerID, push.Notification{
-			Title: "Help is on the way",
-			Body:  "A volunteer is helping with your request.",
-			Data:  map[string]string{"kind": "help-claimed"},
-		})
-	}
-	s.notifyUser(volunteerID, push.Notification{
-		Title: "You're matched",
-		Body:  "The team confirmed your offer. Open the Help tab for the details.",
-		Data:  map[string]string{"kind": "help-approved"},
-	})
-	s.respondStaffHelpRequest(w, admin.ID, requestID)
-}
-
-func (s *Server) handleDeclineOffer(w http.ResponseWriter, r *http.Request) {
-	admin := userFromCtx(r)
-	var requestID, volunteerID string
-	err := s.db.QueryRow(`SELECT request_id, volunteer_id FROM help_offers WHERE id = ? AND status = 'pending'`, r.PathValue("id")).Scan(&requestID, &volunteerID)
-	if err == sql.ErrNoRows {
-		writeError(w, http.StatusNotFound, "Not found")
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if _, err := s.db.Exec(`UPDATE help_offers SET status = 'declined', decided_at = ?, decided_by = ? WHERE id = ?`, nowStamp(), admin.ID, r.PathValue("id")); err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	s.notifyUser(volunteerID, push.Notification{
-		Title: "Offer not used",
-		Body:  "The team couldn't use that offer. Other requests are waiting on the Help tab.",
-		Data:  map[string]string{"kind": "help"},
-	})
-	s.respondStaffHelpRequest(w, admin.ID, requestID)
 }
 
 type progressRequest struct {
@@ -268,8 +60,8 @@ func (s *Server) handleHelpProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var ownerID, status string
-	var claimedBy sql.NullString
-	err := s.db.QueryRow(`SELECT user_id, status, claimed_by FROM help_requests WHERE id = ?`, id).Scan(&ownerID, &status, &claimedBy)
+	var claimedBy, itemsJSON sql.NullString
+	err := s.db.QueryRow(`SELECT user_id, status, claimed_by, items FROM help_requests WHERE id = ?`, id).Scan(&ownerID, &status, &claimedBy, &itemsJSON)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "Not found")
 		return
@@ -319,6 +111,23 @@ func (s *Server) handleHelpProgress(w http.ResponseWriter, r *http.Request) {
 		}[body.Kind]
 		s.notifyUser(ownerID, push.Notification{Title: "Update on your request", Body: text, Data: map[string]string{"kind": "help-progress"}})
 
+	case "ready":
+		// For basic items: "your things are ready".
+		if !isHelper {
+			writeError(w, http.StatusForbidden, "Only the volunteer can send that.")
+			return
+		}
+		if !itemsJSON.Valid || itemsJSON.String == "" {
+			writeError(w, http.StatusBadRequest, "Only a request for items can be marked ready.")
+			return
+		}
+		if _, err := s.db.Exec(`UPDATE help_requests SET progress = 'ready', progress_at = ?, progress_minutes = NULL WHERE id = ?`, nowStamp(), id); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		s.logHelpEvent(id, u.ID, "ready")
+		s.notifyUser(ownerID, push.Notification{Title: "Update on your request", Body: "Your items are ready.", Data: map[string]string{"kind": "help-progress"}})
+
 	case "cant_make_it":
 		if !isHelper {
 			writeError(w, http.StatusForbidden, "Only the volunteer can send that.")
@@ -348,7 +157,7 @@ func (s *Server) handleHelpProgress(w http.ResponseWriter, r *http.Request) {
 		s.logHelpEvent(id, u.ID, "unsafe")
 
 	default:
-		writeError(w, http.StatusBadRequest, "kind must be on_my_way, arrived, running_late, cant_make_it or unsafe")
+		writeError(w, http.StatusBadRequest, "kind must be on_my_way, arrived, running_late, ready, cant_make_it or unsafe")
 		return
 	}
 
@@ -448,7 +257,7 @@ type helpHistoryJSON struct {
 // whom, and how it went.
 func (s *Server) handleHelpHistory(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Query(
-		`SELECT hr.id, hr.category, u.name_encrypted, h.name_encrypted, hr.rating, hr.completed_at
+		`SELECT hr.id, CASE WHEN hr.items IS NOT NULL AND hr.items != '' THEN 'supplies' ELSE hr.category END, u.name_encrypted, h.name_encrypted, hr.rating, hr.completed_at
 		 FROM help_requests hr
 		 JOIN users u ON u.id = hr.user_id
 		 LEFT JOIN users h ON h.id = hr.claimed_by

@@ -235,10 +235,11 @@ func TestMigrateKeepsExistingAppointments(t *testing.T) {
 	}
 	var ends *string
 	var allDay int
-	if err := db.QueryRow(`SELECT ends_at, all_day FROM appointments WHERE id = 'a1'`).Scan(&ends, &allDay); err != nil {
+	var kind string
+	if err := db.QueryRow(`SELECT ends_at, all_day, kind FROM appointments WHERE id = 'a1'`).Scan(&ends, &allDay, &kind); err != nil {
 		t.Fatalf("the saved appointment should survive: %v", err)
 	}
-	if ends != nil || allDay != 0 {
-		t.Fatalf("an old appointment should have no end and not be all day, got %v / %d", ends, allDay)
+	if ends != nil || allDay != 0 || kind != "appointment" {
+		t.Fatalf("an old appointment should have no end, not be all day, and stay an appointment, got %v / %d / %s", ends, allDay, kind)
 	}
 }

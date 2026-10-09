@@ -16,7 +16,6 @@ func matchedRide(t *testing.T, h http.Handler) (jane, sam, ada, id string) {
 	decodeJSON(t, appt, &a)
 	id = createHelp(t, h, jane, map[string]interface{}{"category": "ride", "appointmentId": asMap(t, a["appointment"])["id"]})["id"].(string)
 	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-	approveOffer(t, h, ada, id, "")
 	return jane, sam, ada, id
 }
 
@@ -61,92 +60,6 @@ func TestARideNeedsAnAppointmentAndNotesStayShort(t *testing.T) {
 	if code := post(map[string]interface{}{"category": "food", "note": strings.Repeat("é", 140)}); code != http.StatusCreated {
 		t.Fatalf("140 accented characters are 140 characters: expected 201, got %d", code)
 	}
-}
-
-func TestOffersAreSeenByAdminsAndTheirOwnVolunteerOnly(t *testing.T) {
-	h := newTestServer(t)
-	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
-	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
-	pat, _ := registerUser(t, h, map[string]interface{}{"name": "Pat Helper", "personType": "volunteer", "staffCode": testStaffCode})
-	ada, _ := newAdmin(t, h)
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-
-	adminView := asMap(t, board(t, h, ada)[0])
-	if offers := adminView["offers"].([]interface{}); len(offers) != 1 || asMap(t, offers[0])["volunteerName"] != "Sam Helper" {
-		t.Fatalf("an admin should see Sam's offer, got %v", adminView["offers"])
-	}
-	if asMap(t, board(t, h, sam)[0])["myOffer"] != "pending" {
-		t.Fatalf("Sam should see his offer is waiting")
-	}
-	patView := asMap(t, board(t, h, pat)[0])
-	if patView["myOffer"] != nil || patView["offers"] != nil {
-		t.Fatalf("Pat must not see Sam's offer, got %v", patView)
-	}
-	if mine := myRequest(t, h, jane); mine["offers"] != nil || mine["myOffer"] != nil {
-		t.Fatalf("the person must never see offers, got %v", mine)
-	}
-
-	// Sam can take it back before it's confirmed.
-	offerID := asMap(t, adminView["offers"].([]interface{})[0])["id"].(string)
-	if code := doRequest(t, h, http.MethodDelete, "/api/help-offers/"+offerID, pat, nil).Code; code != http.StatusNotFound {
-		t.Fatalf("withdrawing someone else's offer: expected 404, got %d", code)
-	}
-	if code := doRequest(t, h, http.MethodDelete, "/api/help-offers/"+offerID, sam, nil).Code; code != http.StatusOK {
-		t.Fatalf("withdrawing his own offer: expected 200, got %d", code)
-	}
-	if asMap(t, board(t, h, ada)[0])["offers"] != nil {
-		t.Fatalf("a withdrawn offer should disappear")
-	}
-	if code := doRequest(t, h, http.MethodPost, "/api/help-offers/"+offerID+"/approve", ada, nil).Code; code != http.StatusConflict {
-		t.Fatalf("approving a withdrawn offer: expected 409, got %d", code)
-	}
-}
-
-func TestOnlyAdminsCanApproveOrDeclineAnOffer(t *testing.T) {
-	h := newTestServer(t)
-	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
-	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
-	ada, _ := newAdmin(t, h)
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-	offerID := asMap(t, asMap(t, board(t, h, ada)[0])["offers"].([]interface{})[0])["id"].(string)
-
-	for _, who := range []string{sam, jane} {
-		if code := doRequest(t, h, http.MethodPost, "/api/help-offers/"+offerID+"/approve", who, nil).Code; code != http.StatusForbidden {
-			t.Fatalf("approve by a non-admin: expected 403, got %d", code)
-		}
-		if code := doRequest(t, h, http.MethodPost, "/api/help-offers/"+offerID+"/decline", who, nil).Code; code != http.StatusForbidden {
-			t.Fatalf("decline by a non-admin: expected 403, got %d", code)
-		}
-	}
-	if code := doRequest(t, h, http.MethodPost, "/api/help-offers/"+offerID+"/decline", ada, nil).Code; code != http.StatusOK {
-		t.Fatalf("decline: expected 200, got %d", code)
-	}
-	if asMap(t, board(t, h, sam)[0])["myOffer"] != nil || asMap(t, board(t, h, sam)[0])["status"] != "open" {
-		t.Fatalf("a declined offer leaves the request open and the offer gone")
-	}
-	// Sam may offer again later.
-	if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil).Code; code != http.StatusOK {
-		t.Fatalf("offering again: expected 200, got %d", code)
-	}
-}
-
-func TestAnApprovedMatchCannotBeMadeWithAPausedOrBlockedVolunteer(t *testing.T) {
-	h := newTestServer(t)
-	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
-	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
-	ada, _ := newAdmin(t, h)
-	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-	offerID := asMap(t, asMap(t, board(t, h, ada)[0])["offers"].([]interface{})[0])["id"].(string)
-
-	// Paused after offering: the admin can't confirm.
-	doRequest(t, h, http.MethodPost, "/api/admin/volunteers/"+idOf(samU)+"/pause", ada, nil)
-	if code := doRequest(t, h, http.MethodPost, "/api/help-offers/"+offerID+"/approve", ada, nil).Code; code != http.StatusConflict {
-		t.Fatalf("approving a paused volunteer: expected 409, got %d", code)
-	}
-	_ = janeU
 }
 
 func TestProgressTapsTellThePersonWhereTheirHelperIsUpTo(t *testing.T) {
@@ -315,35 +228,304 @@ func TestOnlyThePersonHelpedCanRateAndOnlyAdminsSeeIt(t *testing.T) {
 	}
 }
 
-func TestMatchingAndProgressSendOnlyGenericAlerts(t *testing.T) {
+func TestAcceptingAndProgressSendOnlyGenericAlerts(t *testing.T) {
 	h, f := pushServer(t)
 	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
-	ada, _ := newAdmin(t, h)
 	registerToken(t, h, jane, tok("a"))
 	registerToken(t, h, sam, tok("b"))
-	registerToken(t, h, ada, tok("c"))
 	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
 	f.reset()
 
 	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
-	if got := f.to(tok("c")); len(got) != 1 || got[0].n.Title != "A volunteer offered to help" {
-		t.Fatalf("the admin should hear about the offer, got %v", got)
-	}
-	if len(f.to(tok("a"))) != 0 {
-		t.Fatalf("the person must not be told about an offer nobody confirmed")
-	}
-	approveOffer(t, h, ada, id, "")
-	if got := f.to(tok("a")); len(got) != 1 || got[0].n.Title != "Help is on the way" {
-		t.Fatalf("the person is told once it is confirmed, got %v", got)
-	}
-	if got := f.to(tok("b")); len(got) != 1 || got[0].n.Title != "You're matched" {
-		t.Fatalf("the volunteer is told they're matched, got %v", got)
+	if got := f.to(tok("a")); len(got) != 1 || got[0].n.Title != "Help is on the way" || strings.Contains(got[0].n.Body, "Sam") {
+		t.Fatalf("the person is told once it's accepted, without a name, got %v", got)
 	}
 	progress(t, h, sam, id, "on_my_way", nil)
 	got := f.to(tok("a"))
 	last := got[len(got)-1].n
 	if last.Body != "Your volunteer is on the way." || strings.Contains(last.Body, "Sam") {
 		t.Fatalf("progress alerts name nobody, got %v", last)
+	}
+}
+
+func postAppt(t *testing.T, h http.Handler, token string, body map[string]interface{}) (int, map[string]interface{}) {
+	t.Helper()
+	rec := doRequest(t, h, http.MethodPost, "/api/appointments", token, body)
+	var out map[string]interface{}
+	decodeJSON(t, rec, &out)
+	return rec.Code, out
+}
+
+func ridesOnBoard(t *testing.T, h http.Handler, token string) []map[string]interface{} {
+	t.Helper()
+	var out []map[string]interface{}
+	for _, r := range board(t, h, token) {
+		if m := asMap(t, r); m["category"] == "ride" {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func TestMarkingAnAppointmentAsNeedingARideShowsItToVolunteersAndAdmins(t *testing.T) {
+	h, f := pushServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
+	ada, _ := newAdmin(t, h)
+	registerToken(t, h, sam, tok("b"))
+	f.reset()
+
+	code, out := postAppt(t, h, jane, map[string]interface{}{"title": "DDS visit", "location": "DDS, Eisenhower Dr", "startsAt": "2026-12-03T15:00:00Z", "needsRide": true})
+	appt := asMap(t, out["appointment"])
+	if code != http.StatusCreated || appt["needsRide"] != true {
+		t.Fatalf("an appointment that needs a ride: got %d %v", code, appt)
+	}
+	for name, token := range map[string]string{"volunteer": sam, "admin": ada} {
+		rides := ridesOnBoard(t, h, token)
+		if len(rides) != 1 {
+			t.Fatalf("the %s should see the ride, got %v", name, rides)
+		}
+		a := asMap(t, rides[0]["appointment"])
+		if rides[0]["name"] != "Jane Doe" || a["title"] != "DDS visit" || a["location"] != "DDS, Eisenhower Dr" {
+			t.Fatalf("the %s should see who, what and where, got %v", name, rides[0])
+		}
+	}
+	if got := f.to(tok("b")); len(got) != 1 || got[0].n.Body != "Someone needs a ride. Open the Help tab to see." {
+		t.Fatalf("volunteers get one generic alert, got %v", got)
+	}
+
+	// It's on their list of appointments as needing a ride.
+	var list map[string]interface{}
+	decodeJSON(t, doRequest(t, h, http.MethodGet, "/api/appointments", jane, nil), &list)
+	if asMap(t, list["appointments"].([]interface{})[0])["needsRide"] != true {
+		t.Fatalf("the appointment should say it needs a ride")
+	}
+}
+
+func TestAnAppointmentWithoutARideIsNeverOnTheBoard(t *testing.T) {
+	h := newTestServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
+	postAppt(t, h, jane, map[string]interface{}{"title": "Private thing", "startsAt": "2026-12-03T15:00:00Z"})
+	if got := board(t, h, sam); len(got) != 0 {
+		t.Fatalf("an appointment nobody needs a ride to stays private, got %v", got)
+	}
+}
+
+func TestTurningTheRideOnAndOffLater(t *testing.T) {
+	h := newTestServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
+	_, out := postAppt(t, h, jane, map[string]interface{}{"title": "DDS visit", "startsAt": "2026-12-03T15:00:00Z"})
+	id := asMap(t, out["appointment"])["id"].(string)
+
+	patch := func(body map[string]interface{}) (int, map[string]interface{}) {
+		rec := doRequest(t, h, http.MethodPatch, "/api/appointments/"+id, jane, body)
+		var o map[string]interface{}
+		decodeJSON(t, rec, &o)
+		return rec.Code, o
+	}
+	if code, o := patch(map[string]interface{}{"needsRide": true}); code != http.StatusOK || asMap(t, o["appointment"])["needsRide"] != true {
+		t.Fatalf("turning the ride on: got %d %v", code, o)
+	}
+	// Saving again with it still on doesn't make a second request.
+	patch(map[string]interface{}{"needsRide": true})
+	patch(map[string]interface{}{"title": "DDS visit (moved)"})
+	if rides := ridesOnBoard(t, h, sam); len(rides) != 1 {
+		t.Fatalf("one ride, however many times it's saved, got %d", len(rides))
+	}
+	if code, o := patch(map[string]interface{}{"needsRide": false}); code != http.StatusOK || asMap(t, o["appointment"])["needsRide"] != false {
+		t.Fatalf("turning the ride off: got %d %v", code, o)
+	}
+	if rides := ridesOnBoard(t, h, sam); len(rides) != 0 {
+		t.Fatalf("turning it off removes the ride from the board, got %v", rides)
+	}
+}
+
+func TestChangingOrCancellingARideTellsTheVolunteerWhoAccepted(t *testing.T) {
+	h, f := pushServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
+	registerToken(t, h, sam, tok("b"))
+	_, out := postAppt(t, h, jane, map[string]interface{}{"title": "DDS visit", "startsAt": "2026-12-03T15:00:00Z", "needsRide": true})
+	id := asMap(t, out["appointment"])["id"].(string)
+	rideID := ridesOnBoard(t, h, sam)[0]["id"].(string)
+	doRequest(t, h, http.MethodPost, "/api/help-requests/"+rideID+"/claim", sam, nil)
+	f.reset()
+
+	// A new time: Sam is told, with no names or times in the alert.
+	doRequest(t, h, http.MethodPatch, "/api/appointments/"+id, jane, map[string]interface{}{"startsAt": "2026-12-03T17:00:00Z"})
+	if got := f.to(tok("b")); len(got) != 1 || got[0].n.Title != "The time of a ride changed" {
+		t.Fatalf("Sam should hear the time changed, got %v", got)
+	}
+	f.reset()
+
+	// Deleting the appointment cancels the ride and tells Sam.
+	if code := doRequest(t, h, http.MethodDelete, "/api/appointments/"+id, jane, nil).Code; code != http.StatusOK {
+		t.Fatalf("delete: expected 200, got %d", code)
+	}
+	if got := f.to(tok("b")); len(got) != 1 || got[0].n.Title != "A ride was cancelled" {
+		t.Fatalf("Sam should hear it was cancelled, got %v", got)
+	}
+	if rides := ridesOnBoard(t, h, sam); len(rides) != 0 {
+		t.Fatalf("a cancelled ride leaves the board, got %v", rides)
+	}
+}
+
+func TestAnAllDayAppointmentCannotNeedARide(t *testing.T) {
+	h := newTestServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	if code, _ := postAppt(t, h, jane, map[string]interface{}{"title": "Court", "startsAt": "2026-12-03T05:00:00Z", "allDay": true, "needsRide": true}); code != http.StatusBadRequest {
+		t.Fatalf("an all-day ride: expected 400, got %d", code)
+	}
+	var list map[string]interface{}
+	decodeJSON(t, doRequest(t, h, http.MethodGet, "/api/appointments", jane, nil), &list)
+	if len(list["appointments"].([]interface{})) != 0 {
+		t.Fatalf("a refused appointment must not be left behind, got %v", list)
+	}
+	// Making an existing ride appointment all-day cancels the ride rather than leaving it stranded.
+	_, out := postAppt(t, h, jane, map[string]interface{}{"title": "DDS", "startsAt": "2026-12-03T15:00:00Z", "needsRide": true})
+	id := asMap(t, out["appointment"])["id"].(string)
+	doRequest(t, h, http.MethodPatch, "/api/appointments/"+id, jane, map[string]interface{}{"allDay": true})
+	var after map[string]interface{}
+	decodeJSON(t, doRequest(t, h, http.MethodGet, "/api/appointments", jane, nil), &after)
+	if asMap(t, after["appointments"].([]interface{})[0])["needsRide"] != false {
+		t.Fatalf("an all-day appointment has no ride, got %v", after)
+	}
+}
+
+func TestAFinishedRideLetsThePersonAskAgainForTheSameAppointment(t *testing.T) {
+	h := newTestServer(t)
+	jane, sam, _, id := matchedRide(t, h)
+	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/complete", sam, nil)
+	var list map[string]interface{}
+	decodeJSON(t, doRequest(t, h, http.MethodGet, "/api/appointments", jane, nil), &list)
+	appt := asMap(t, list["appointments"].([]interface{})[0])
+	if appt["needsRide"] != false {
+		t.Fatalf("a finished ride no longer needs one, got %v", appt)
+	}
+	rec := doRequest(t, h, http.MethodPatch, "/api/appointments/"+appt["id"].(string), jane, map[string]interface{}{"needsRide": true})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("asking again: expected 200, got %d", rec.Code)
+	}
+}
+
+func TestAskingForBasicItemsFromAList(t *testing.T) {
+	h, f := pushServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
+	registerToken(t, h, sam, tok("b"))
+	post := func(body map[string]interface{}) (int, map[string]interface{}) {
+		rec := doRequest(t, h, http.MethodPost, "/api/help-requests", jane, body)
+		var out map[string]interface{}
+		decodeJSON(t, rec, &out)
+		return rec.Code, out
+	}
+	f.reset()
+	code, out := post(map[string]interface{}{"category": "supplies", "items": []string{"socks", "blanket", "socks", "water"}, "note": "Size 10 shoes"})
+	req := asMap(t, out["request"])
+	if code != http.StatusCreated || req["category"] != "supplies" {
+		t.Fatalf("a supplies request: got %d %v", code, out)
+	}
+	// Repeats are dropped and the list always reads in the same order.
+	items := req["items"].([]interface{})
+	if len(items) != 3 || items[0] != "water" || items[1] != "socks" || items[2] != "blanket" {
+		t.Fatalf("expected water, socks, blanket once each, got %v", items)
+	}
+	if got := f.to(tok("b")); len(got) != 1 || got[0].n.Body != "Someone asked for basic items. Open the Help tab to see." {
+		t.Fatalf("volunteers get one generic alert, got %v", got)
+	}
+
+	// Volunteers see the items on the board, and the person's own list shows them too.
+	entry := asMap(t, board(t, h, sam)[0])
+	if entry["category"] != "supplies" || len(entry["items"].([]interface{})) != 3 {
+		t.Fatalf("the board should show the items, got %v", entry)
+	}
+	if mine := myRequest(t, h, jane); mine["category"] != "supplies" {
+		t.Fatalf("the person sees their own request as supplies, got %v", mine)
+	}
+
+	for name, body := range map[string]map[string]interface{}{
+		"nothing picked":     {"category": "supplies", "items": []string{}},
+		"an unknown item":    {"category": "supplies", "items": []string{"socks", "a pony"}},
+		"too many":           {"category": "supplies", "items": []string{"meal", "water", "snacks", "socks", "underwear", "shirt", "pants", "shoes", "coat", "hat_gloves", "blanket"}},
+		"items on a non-sup": {"category": "food", "items": []string{"socks"}},
+	} {
+		if code, _ := post(body); code != http.StatusBadRequest {
+			t.Fatalf("%s: expected 400, got %d", name, code)
+		}
+	}
+}
+
+func TestAVolunteerCanMarkTheItemsReady(t *testing.T) {
+	h, f := pushServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
+	registerToken(t, h, jane, tok("a"))
+	_, out := func() (int, map[string]interface{}) {
+		rec := doRequest(t, h, http.MethodPost, "/api/help-requests", jane, map[string]interface{}{"category": "supplies", "items": []string{"socks"}})
+		var o map[string]interface{}
+		decodeJSON(t, rec, &o)
+		return rec.Code, o
+	}()
+	id := asMap(t, out["request"])["id"].(string)
+	matchVolunteer(t, h, sam, id)
+	f.reset()
+	if code := progress(t, h, sam, id, "ready", nil); code != http.StatusOK {
+		t.Fatalf("ready: expected 200, got %d", code)
+	}
+	if mine := myRequest(t, h, jane); mine["progress"] != "ready" {
+		t.Fatalf("the person should see their items are ready, got %v", mine)
+	}
+	if got := f.to(tok("a")); len(got) != 1 || got[0].n.Body != "Your items are ready." {
+		t.Fatalf("a generic alert, got %v", got)
+	}
+	// "Ready" is only for items, not a ride.
+	ride, rideSam, _, rideID := matchedRide(t, h)
+	_ = ride
+	if code := progress(t, h, rideSam, rideID, "ready", nil); code != http.StatusBadRequest {
+		t.Fatalf("ready on a ride: expected 400, got %d", code)
+	}
+}
+
+func TestTheHelpHistoryShowsSuppliesRequestsAsSupplies(t *testing.T) {
+	h := newTestServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
+	ada, _ := newAdmin(t, h)
+	rec := doRequest(t, h, http.MethodPost, "/api/help-requests", jane, map[string]interface{}{"category": "supplies", "items": []string{"blanket"}})
+	var out map[string]interface{}
+	decodeJSON(t, rec, &out)
+	id := asMap(t, out["request"])["id"].(string)
+	matchVolunteer(t, h, sam, id)
+	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/complete", sam, nil)
+	var history map[string]interface{}
+	decodeJSON(t, doRequest(t, h, http.MethodGet, "/api/admin/help-history", ada, nil), &history)
+	entries := history["history"].([]interface{})
+	if len(entries) != 1 || asMap(t, entries[0])["category"] != "supplies" {
+		t.Fatalf("history should call it supplies, got %v", entries)
+	}
+}
+
+func TestTheBoardListsRidesFirstSoonestAppointmentFirst(t *testing.T) {
+	h := newTestServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
+	createHelp(t, h, jane, map[string]interface{}{"category": "food", "note": "first asked, not a ride"})
+	postAppt(t, h, jane, map[string]interface{}{"title": "Later visit", "startsAt": "2026-12-09T15:00:00Z", "needsRide": true})
+	postAppt(t, h, jane, map[string]interface{}{"title": "Sooner visit", "startsAt": "2026-12-03T15:00:00Z", "needsRide": true})
+
+	var titles []string
+	for _, r := range board(t, h, sam) {
+		m := asMap(t, r)
+		if appt, ok := m["appointment"].(map[string]interface{}); ok && appt != nil {
+			titles = append(titles, appt["title"].(string))
+		} else {
+			titles = append(titles, "(not a ride)")
+		}
+	}
+	if len(titles) != 3 || titles[0] != "Sooner visit" || titles[1] != "Later visit" || titles[2] != "(not a ride)" {
+		t.Fatalf("rides should come first, soonest first, got %v", titles)
 	}
 }

@@ -218,3 +218,55 @@ func TestAppointmentsCanHaveAnEndTimeAndBeAllDay(t *testing.T) {
 		t.Fatalf("turning on all-day: got %v", flagged)
 	}
 }
+
+func TestACalendarItemIsAnAppointmentOrAnEvent(t *testing.T) {
+	h := newTestServer(t)
+	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	post := func(body map[string]interface{}) (int, map[string]interface{}) {
+		rec := doRequest(t, h, http.MethodPost, "/api/appointments", token, body)
+		var out map[string]interface{}
+		decodeJSON(t, rec, &out)
+		return rec.Code, out
+	}
+	// Left unsaid, it's an appointment (so anything saved before this existed stays one).
+	code, out := post(map[string]interface{}{"title": "Check-in", "startsAt": "2026-12-01T14:00:00Z"})
+	if code != http.StatusCreated || asMap(t, out["appointment"])["kind"] != "appointment" {
+		t.Fatalf("default kind: got %d %v", code, out)
+	}
+	code, out = post(map[string]interface{}{"title": "Birthday dinner", "startsAt": "2026-12-02T18:00:00Z", "kind": "event"})
+	eventID := asMap(t, out["appointment"])["id"].(string)
+	if code != http.StatusCreated || asMap(t, out["appointment"])["kind"] != "event" {
+		t.Fatalf("an event: got %d %v", code, out)
+	}
+	if code, _ := post(map[string]interface{}{"title": "Odd", "startsAt": "2026-12-02T18:00:00Z", "kind": "meeting"}); code != http.StatusBadRequest {
+		t.Fatalf("an unknown kind: expected 400, got %d", code)
+	}
+	// Only an appointment can ask for a ride.
+	if code, _ := post(map[string]interface{}{"title": "Party", "startsAt": "2026-12-02T18:00:00Z", "kind": "event", "needsRide": true}); code != http.StatusBadRequest {
+		t.Fatalf("an event with a ride: expected 400, got %d", code)
+	}
+	rec := doRequest(t, h, http.MethodPatch, "/api/appointments/"+eventID, token, map[string]interface{}{"needsRide": true})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("asking for a ride on an event: expected 400, got %d", rec.Code)
+	}
+}
+
+func TestMakingAnAppointmentAnEventDropsItsRide(t *testing.T) {
+	h := newTestServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
+	_, out := postAppt(t, h, jane, map[string]interface{}{"title": "DDS", "startsAt": "2026-12-03T15:00:00Z", "needsRide": true})
+	id := asMap(t, out["appointment"])["id"].(string)
+	if len(ridesOnBoard(t, h, sam)) != 1 {
+		t.Fatalf("setup: the ride should be on the board")
+	}
+	rec := doRequest(t, h, http.MethodPatch, "/api/appointments/"+id, jane, map[string]interface{}{"kind": "event"})
+	var o map[string]interface{}
+	decodeJSON(t, rec, &o)
+	if rec.Code != http.StatusOK || asMap(t, o["appointment"])["kind"] != "event" || asMap(t, o["appointment"])["needsRide"] != false {
+		t.Fatalf("becoming an event: got %d %v", rec.Code, o)
+	}
+	if len(ridesOnBoard(t, h, sam)) != 0 {
+		t.Fatalf("an event has no ride, so it leaves the board")
+	}
+}

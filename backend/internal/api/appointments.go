@@ -8,30 +8,35 @@ import (
 	"time"
 
 	"ground-to-growth-connect-backend/internal/cryptox"
+	"ground-to-growth-connect-backend/internal/push"
 )
 
 // A participant's own appointments — private to them alone. Unlike location
 // or documents, staff have no endpoint that can ever see this table.
 
 type appointmentJSON struct {
-	ID        string  `json:"id"`
-	Title     string  `json:"title"`
-	Notes     *string `json:"notes"`
-	Location  *string `json:"location"`
-	StartsAt  string  `json:"startsAt"`
-	EndsAt    *string `json:"endsAt"`
-	AllDay    bool    `json:"allDay"`
-	CreatedAt string  `json:"createdAt"`
+	ID       string  `json:"id"`
+	Title    string  `json:"title"`
+	Notes    *string `json:"notes"`
+	Location *string `json:"location"`
+	StartsAt string  `json:"startsAt"`
+	EndsAt   *string `json:"endsAt"`
+	AllDay   bool    `json:"allDay"`
+	// appointment (something to attend, can ask for a ride) | event (their own).
+	Kind string `json:"kind"`
+	// True while there is an open or matched ride request for this appointment.
+	NeedsRide bool   `json:"needsRide"`
+	CreatedAt string `json:"createdAt"`
 }
 
-const appointmentColumns = `id, title_encrypted, notes_encrypted, location_encrypted, starts_at, ends_at, all_day, created_at`
+const appointmentColumns = `id, title_encrypted, notes_encrypted, location_encrypted, starts_at, ends_at, all_day, kind, created_at`
 
 func scanAppointment(row interface {
 	Scan(dest ...interface{}) error
 }) (appointmentJSON, error) {
 	var a appointmentJSON
 	var titleEnc, notesEnc, locationEnc []byte
-	if err := row.Scan(&a.ID, &titleEnc, &notesEnc, &locationEnc, &a.StartsAt, &a.EndsAt, &a.AllDay, &a.CreatedAt); err != nil {
+	if err := row.Scan(&a.ID, &titleEnc, &notesEnc, &locationEnc, &a.StartsAt, &a.EndsAt, &a.AllDay, &a.Kind, &a.CreatedAt); err != nil {
 		return a, err
 	}
 	title, err := cryptox.DecryptString(titleEnc)
@@ -61,7 +66,12 @@ type createAppointmentRequest struct {
 	StartsAt string  `json:"startsAt"`
 	EndsAt   *string `json:"endsAt"`
 	AllDay   bool    `json:"allDay"`
+	Kind     string  `json:"kind"`
+	// "I need a ride": volunteers and admins see a ride request for this one.
+	NeedsRide bool `json:"needsRide"`
 }
+
+var appointmentKinds = []string{"appointment", "event"}
 
 // checkEnd validates an optional end time: a real date-time, after the start.
 // A blank end means "no end time".
@@ -107,6 +117,18 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, problem)
 		return
 	}
+	kind := body.Kind
+	if kind == "" {
+		kind = "appointment"
+	}
+	if !contains(appointmentKinds, kind) {
+		writeError(w, http.StatusBadRequest, "kind must be appointment or event")
+		return
+	}
+	if body.NeedsRide && kind != "appointment" {
+		writeError(w, http.StatusBadRequest, "Only an appointment can have a ride.")
+		return
+	}
 
 	titleEnc, err := cryptox.EncryptString(&title)
 	if err != nil {
@@ -125,15 +147,27 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 	}
 
 	row := s.db.QueryRow(
-		`INSERT INTO appointments (user_id, title_encrypted, notes_encrypted, location_encrypted, starts_at, ends_at, all_day)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO appointments (user_id, title_encrypted, notes_encrypted, location_encrypted, starts_at, ends_at, all_day, kind)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		 RETURNING `+appointmentColumns,
-		u.ID, titleEnc, notesEnc, locationEnc, body.StartsAt, endsAt, body.AllDay,
+		u.ID, titleEnc, notesEnc, locationEnc, body.StartsAt, endsAt, body.AllDay, kind,
 	)
 	appt, err := scanAppointment(row)
 	if err != nil {
 		writeInternalError(w, err)
 		return
+	}
+	if body.NeedsRide {
+		if status, msg, err := s.setRide(u.ID, appt.ID, true, appt.AllDay); err != nil {
+			writeInternalError(w, err)
+			return
+		} else if status != 0 {
+			// The appointment is saved; only the ride wasn't, and they're told why.
+			_, _ = s.db.Exec(`DELETE FROM appointments WHERE id = ?`, appt.ID)
+			writeError(w, status, msg)
+			return
+		}
+		appt.NeedsRide = true
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{"appointment": appt})
@@ -161,6 +195,11 @@ func (s *Server) handleListAppointments(w http.ResponseWriter, r *http.Request) 
 		}
 		appointments = append(appointments, appt)
 	}
+	rows.Close()
+	rides := s.activeRideAppointments(u.ID)
+	for i := range appointments {
+		appointments[i].NeedsRide = rides[appointments[i].ID]
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"appointments": appointments})
 }
@@ -171,8 +210,10 @@ type updateAppointmentRequest struct {
 	Location *string `json:"location"`
 	StartsAt *string `json:"startsAt"`
 	// An empty endsAt clears the end time.
-	EndsAt *string `json:"endsAt"`
-	AllDay *bool   `json:"allDay"`
+	EndsAt    *string `json:"endsAt"`
+	AllDay    *bool   `json:"allDay"`
+	Kind      *string `json:"kind"`
+	NeedsRide *bool   `json:"needsRide"`
 }
 
 func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request) {
@@ -189,10 +230,11 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 	var startsAt string
 	var endsAt *string
 	var allDay bool
+	var oldStart, kind string
 	err := s.db.QueryRow(
-		`SELECT title_encrypted, notes_encrypted, location_encrypted, starts_at, ends_at, all_day FROM appointments WHERE id = ? AND user_id = ?`,
+		`SELECT title_encrypted, notes_encrypted, location_encrypted, starts_at, ends_at, all_day, kind FROM appointments WHERE id = ? AND user_id = ?`,
 		id, u.ID,
-	).Scan(&titleEnc, &notesEnc, &locationEnc, &startsAt, &endsAt, &allDay)
+	).Scan(&titleEnc, &notesEnc, &locationEnc, &startsAt, &endsAt, &allDay, &kind)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "Not found")
 		return
@@ -201,6 +243,7 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 		writeInternalError(w, err)
 		return
 	}
+	oldStart = startsAt
 
 	if body.Title != nil {
 		title := strings.TrimSpace(*body.Title)
@@ -238,6 +281,13 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 	if body.AllDay != nil {
 		allDay = *body.AllDay
 	}
+	if body.Kind != nil {
+		if !contains(appointmentKinds, *body.Kind) {
+			writeError(w, http.StatusBadRequest, "kind must be appointment or event")
+			return
+		}
+		kind = *body.Kind
+	}
 	// Whatever changed, the end still has to come after the start.
 	endsAt, problem := checkEnd(startsAt, endsAt)
 	if problem != "" {
@@ -246,15 +296,45 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 	}
 
 	row := s.db.QueryRow(
-		`UPDATE appointments SET title_encrypted = ?, notes_encrypted = ?, location_encrypted = ?, starts_at = ?, ends_at = ?, all_day = ?
+		`UPDATE appointments SET title_encrypted = ?, notes_encrypted = ?, location_encrypted = ?, starts_at = ?, ends_at = ?, all_day = ?, kind = ?
 		 WHERE id = ? AND user_id = ?
 		 RETURNING `+appointmentColumns,
-		titleEnc, notesEnc, locationEnc, startsAt, endsAt, allDay, id, u.ID,
+		titleEnc, notesEnc, locationEnc, startsAt, endsAt, allDay, kind, id, u.ID,
 	)
 	appt, err := scanAppointment(row)
 	if err != nil {
 		writeInternalError(w, err)
 		return
+	}
+
+	// An all-day appointment can't have a ride; otherwise follow what they asked.
+	want := s.rideActive(appt.ID)
+	if body.NeedsRide != nil {
+		want = *body.NeedsRide
+	}
+	if appt.AllDay && want && body.NeedsRide != nil {
+		writeError(w, http.StatusBadRequest, "A ride needs a start time, so it can't be an all-day appointment.")
+		return
+	}
+	if appt.Kind != "appointment" && want && body.NeedsRide != nil && *body.NeedsRide {
+		writeError(w, http.StatusBadRequest, "Only an appointment can have a ride.")
+		return
+	}
+	// An all-day item, or an event, has no ride; one that had one loses it.
+	if appt.AllDay || appt.Kind != "appointment" {
+		want = false
+	}
+	if status, msg, err := s.setRide(u.ID, appt.ID, want, appt.AllDay); err != nil {
+		writeInternalError(w, err)
+		return
+	} else if status != 0 {
+		writeError(w, status, msg)
+		return
+	}
+	appt.NeedsRide = want
+	// If the time moved on a ride that has a volunteer, they need to know.
+	if want && body.StartsAt != nil && *body.StartsAt != oldStart {
+		s.notifyRideChange(appt.ID, "The time of a ride changed", "Open the Help tab to see the new time.")
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"appointment": appt})
@@ -264,6 +344,11 @@ func (s *Server) handleDeleteAppointment(w http.ResponseWriter, r *http.Request)
 	u := userFromCtx(r)
 	id := r.PathValue("id")
 
+	// Deleting the appointment cancels any ride that was asked for it.
+	if _, _, err := s.setRide(u.ID, id, false, false); err != nil {
+		writeInternalError(w, err)
+		return
+	}
 	res, err := s.db.Exec(`DELETE FROM appointments WHERE id = ? AND user_id = ?`, id, u.ID)
 	if err != nil {
 		writeInternalError(w, err)
@@ -289,4 +374,65 @@ func trimmedOrNil(s *string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+// rideActive is true while an appointment has a ride request still open or
+// matched with a volunteer.
+func (s *Server) rideActive(apptID string) bool {
+	var n int
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM help_requests WHERE appointment_id = ? AND category = 'ride' AND status != 'done'`, apptID).Scan(&n)
+	return n > 0
+}
+
+func (s *Server) activeRideAppointments(userID string) map[string]bool {
+	out := map[string]bool{}
+	rows, err := s.db.Query(`SELECT appointment_id FROM help_requests WHERE user_id = ? AND category = 'ride' AND status != 'done' AND appointment_id IS NOT NULL`, userID)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			out[id] = true
+		}
+	}
+	return out
+}
+
+// setRide makes the ride request for an appointment match what the person
+// wants: on creates one (and tells the volunteers and admins), off removes it
+// and tells any volunteer who had taken it. It returns an HTTP status and
+// message when the person should be told why it didn't work.
+func (s *Server) setRide(userID, apptID string, want, allDay bool) (int, string, error) {
+	active := s.rideActive(apptID)
+	if want && !active {
+		if allDay {
+			return http.StatusBadRequest, "A ride needs a start time, so it can't be an all-day appointment.", nil
+		}
+		if _, err := s.insertHelpRequest(userID, "ride", nil, apptID, nil); err == errTooManyRequests {
+			return http.StatusConflict, "You already have several open requests. Mark some as done first.", nil
+		} else if err != nil {
+			return 0, "", err
+		}
+		return 0, "", nil
+	}
+	if !want && active {
+		s.notifyRideChange(apptID, "A ride was cancelled", "The person no longer needs it. Open the Help tab.")
+		if _, err := s.db.Exec(`DELETE FROM help_requests WHERE appointment_id = ? AND category = 'ride' AND status != 'done'`, apptID); err != nil {
+			return 0, "", err
+		}
+	}
+	return 0, "", nil
+}
+
+// notifyRideChange tells the volunteer matched to an appointment's ride, if
+// there is one. Alerts name no one.
+func (s *Server) notifyRideChange(apptID, title, body string) {
+	var volunteerID sql.NullString
+	err := s.db.QueryRow(`SELECT claimed_by FROM help_requests WHERE appointment_id = ? AND category = 'ride' AND status = 'claimed'`, apptID).Scan(&volunteerID)
+	if err != nil || !volunteerID.Valid {
+		return
+	}
+	s.notifyUser(volunteerID.String, push.Notification{Title: title, Body: body, Data: map[string]string{"kind": "help"}})
 }
