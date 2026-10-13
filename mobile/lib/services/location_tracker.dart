@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart' show Permission, PermissionActions;
 
 import '../models/models.dart';
 import 'api_client.dart';
@@ -98,6 +100,17 @@ class LocationTracker extends ChangeNotifier {
   /// from the Settings app, since nothing else notices a change made there.
   Future<void> refreshAuthorizationStatus() => _startIfAuthorized();
 
+  /// Android 13+ hides the "sharing your location" notification (the thing that
+  /// lets sharing continue in the background) unless the person allows it. Not
+  /// fatal if they say no: sharing still works, they just don't see the notice.
+  /// (Only on a real Android phone; tests run on the Mac.)
+  Future<void> _allowSharingNotification() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await Permission.notification.request();
+    } catch (_) {}
+  }
+
   Future<void> _startIfAuthorized() async {
     if (!_consentGranted) {
       _stopTracking();
@@ -125,6 +138,7 @@ class LocationTracker extends ChangeNotifier {
       case LocationPermission.whileInUse:
         permissionBlocked = false;
         accuracyStatus = await Geolocator.getLocationAccuracy();
+        await _allowSharingNotification();
         _beginUpdates();
       case LocationPermission.denied:
       case LocationPermission.deniedForever:
@@ -253,8 +267,24 @@ LocationSettings _platformLocationSettings() {
       showBackgroundLocationIndicator: true,
     );
   }
-  // Android background delivery needs its own foreground-service setup,
-  // which hasn't been built yet — plain settings are correct until it is.
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    // Android stops background apps from reading location unless a visible
+    // notification says something is still watching — the honest signal that
+    // matches the consent this app asks for. This keeps check-ins going with
+    // the screen off.
+    return AndroidSettings(
+      accuracy: LocationAccuracy.medium,
+      distanceFilter: 100,
+      intervalDuration: const Duration(minutes: 5),
+      foregroundNotificationConfig: const ForegroundNotificationConfig(
+        notificationTitle: 'Ground to Growth Connect',
+        notificationText: 'Sharing your location with Ground to Growth admins. You can turn this off in the app.',
+        notificationChannelName: 'Location sharing',
+        enableWakeLock: true,
+        setOngoing: true,
+      ),
+    );
+  }
   return const LocationSettings(accuracy: LocationAccuracy.medium, distanceFilter: 100);
 }
 

@@ -228,9 +228,11 @@ class _SharingCard extends StatelessWidget {
                   children: [
                     Icon(Icons.schedule_rounded, size: 16, color: stale ? Brand.amber : Colors.white54),
                     const SizedBox(width: 6),
-                    Text(
-                      last == null ? 'Waiting for your first check-in…' : 'Last check-in ${timeAgo(last)}',
-                      style: TextStyle(color: stale ? Brand.amber : Colors.white54, fontSize: 13),
+                    Expanded(
+                      child: Text(
+                        last == null ? 'Waiting for your first check-in…' : 'Last check-in ${timeAgo(last)}',
+                        style: TextStyle(color: stale ? Brand.amber : Colors.white54, fontSize: 13),
+                      ),
                     ),
                   ],
                 ),

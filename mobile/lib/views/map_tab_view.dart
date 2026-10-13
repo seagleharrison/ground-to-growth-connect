@@ -445,12 +445,13 @@ class _PeopleSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          const Row(
+          // A Wrap, so the legend flows onto a second line with large text.
+          const Wrap(
+            spacing: 14,
+            runSpacing: 6,
             children: [
               _Legend(Brand.green, 'Active now'),
-              SizedBox(width: 14),
               _Legend(Brand.amber, 'Within 2 h'),
-              SizedBox(width: 14),
               _Legend(Colors.white38, 'Earlier'),
             ],
           ),

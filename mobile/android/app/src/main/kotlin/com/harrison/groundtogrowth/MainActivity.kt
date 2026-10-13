@@ -1,4 +1,4 @@
-package com.groundtogrowth.ground_to_growth_connect
+package com.harrison.groundtogrowth
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

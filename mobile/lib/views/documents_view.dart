@@ -172,6 +172,9 @@ class _DocumentsViewState extends State<DocumentsView> {
     final total = checklist.length;
     final done = total - missingCoreDocuments(app.documents, hidden: app.hiddenDocuments).length;
 
+    // The cards grow with the person's text size, so large text isn't cut off.
+    final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final large = textScale > 1.25;
     const cardHeight = 176.0;
     const peek = 96.0; // how much of each card shows above the next one
     final stackHeight = total == 0 ? 0.0 : peek * (total - 1) + cardHeight;
@@ -183,29 +186,42 @@ class _DocumentsViewState extends State<DocumentsView> {
         Row(
           children: [
             const Text('Your documents', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const Spacer(),
-            Text(
-              total == 0 ? 'Nothing left on your list' : '$done of $total on file',
-              style: TextStyle(color: total > 0 && done == total ? walletGreen : Colors.grey, fontSize: 13),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                total == 0 ? 'Nothing left on your list' : '$done of $total on file',
+                textAlign: TextAlign.end,
+                style: TextStyle(color: total > 0 && done == total ? walletGreen : Colors.grey, fontSize: 13),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          height: stackHeight,
-          child: Stack(
+        if (large)
+          // Big text doesn't fit the overlapping wallet stack, so the cards
+          // lay out one under another, each as tall as it needs to be.
+          Column(
             children: [
-              for (final (index, type) in checklist.indexed)
-                Positioned(
-                  top: index * peek,
-                  left: 0,
-                  right: 0,
-                  height: cardHeight,
-                  child: _walletCard(context, app, type),
-                ),
+              for (final type in checklist)
+                Padding(padding: const EdgeInsets.only(bottom: 12), child: _walletCard(context, app, type, large: true)),
             ],
+          )
+        else
+          SizedBox(
+            height: stackHeight,
+            child: Stack(
+              children: [
+                for (final (index, type) in checklist.indexed)
+                  Positioned(
+                    top: index * peek,
+                    left: 0,
+                    right: 0,
+                    height: cardHeight,
+                    child: _walletCard(context, app, type),
+                  ),
+              ],
+            ),
           ),
-        ),
         if (hidden.isNotEmpty) ...[
           const SizedBox(height: 16),
           _hiddenDocuments(app, hidden),
@@ -241,7 +257,7 @@ class _DocumentsViewState extends State<DocumentsView> {
     );
   }
 
-  Widget _walletCard(BuildContext context, AppState app, DocumentType type) {
+  Widget _walletCard(BuildContext context, AppState app, DocumentType type, {bool large = false}) {
     final docs = app.documents.where((d) => d.type == type).toList();
     final onFile = docs.isNotEmpty;
     final colors = walletColors(type);
@@ -302,17 +318,24 @@ class _DocumentsViewState extends State<DocumentsView> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          onFile ? 'On file · ${docs.first.createdAt.substring(0, 10)}' : 'Not added yet · tap to add',
-                          style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  if (large) ...[
+                    Text(
+                      onFile ? 'On file · ${docs.first.createdAt.substring(0, 10)}' : 'Not added yet · tap to add',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                    if (!onFile) Padding(padding: const EdgeInsets.only(top: 8), child: _dontHaveChip(app, type)),
+                  ] else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            onFile ? 'On file · ${docs.first.createdAt.substring(0, 10)}' : 'Not added yet · tap to add',
+                            style: const TextStyle(color: Colors.white70, fontSize: 14),
+                          ),
                         ),
-                      ),
-                      if (!onFile) _dontHaveChip(app, type),
-                    ],
-                  ),
+                        if (!onFile) _dontHaveChip(app, type),
+                      ],
+                    ),
                 ],
               ),
             ),

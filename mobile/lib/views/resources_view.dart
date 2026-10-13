@@ -178,7 +178,7 @@ class _UrgentHelpCard extends StatelessWidget {
             children: [
               Icon(Icons.emergency_rounded, color: Brand.red),
               SizedBox(width: 10),
-              Text('Need help right now?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              Expanded(child: Text('Need help right now?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
             ],
           ),
           const SizedBox(height: 8),
@@ -187,13 +187,23 @@ class _UrgentHelpCard extends StatelessWidget {
             style: TextStyle(color: Colors.white70, height: 1.4),
           ),
           const SizedBox(height: 14),
-          const Row(
-            children: [
-              Expanded(child: PhoneButton(phone: emergencyPhone, prominent: true)),
-              SizedBox(width: 10),
-              Expanded(child: PhoneButton(phone: crisisPhone)),
-            ],
-          ),
+          // With large text the two call buttons are too wide to sit side by side.
+          if (MediaQuery.textScalerOf(context).scale(16) / 16 > 1.25)
+            const Column(
+              children: [
+                SizedBox(width: double.infinity, child: PhoneButton(phone: emergencyPhone, prominent: true)),
+                SizedBox(height: 10),
+                SizedBox(width: double.infinity, child: PhoneButton(phone: crisisPhone)),
+              ],
+            )
+          else
+            const Row(
+              children: [
+                Expanded(child: PhoneButton(phone: emergencyPhone, prominent: true)),
+                SizedBox(width: 10),
+                Expanded(child: PhoneButton(phone: crisisPhone)),
+              ],
+            ),
         ],
       ),
     );

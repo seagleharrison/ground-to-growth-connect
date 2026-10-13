@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'nav.dart';
 import 'theme/app_theme.dart';
 import 'util/time.dart';
+import 'widgets/text_scale_cap.dart';
 import 'widgets/ui.dart';
 import 'services/biometric_auth.dart';
 import 'views/main_tab_view.dart';
 import 'views/recovery_code_view.dart';
 import 'views/register_view.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // The screens are made for a phone held upright; sideways would break the layouts.
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   runApp(const GroundToGrowthConnectApp());
 }
 
@@ -31,6 +36,7 @@ class GroundToGrowthConnectApp extends StatelessWidget {
         theme: buildAppTheme(),
         darkTheme: buildAppTheme(),
         themeMode: ThemeMode.dark,
+        builder: (context, child) => capTextScale(child ?? const SizedBox.shrink()),
         home: const RootView(),
       ),
     );

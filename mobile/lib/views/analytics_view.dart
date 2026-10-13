@@ -100,27 +100,29 @@ class _Overview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final participants = _BigNumber(
+      key: const Key('stat-participants'),
+      value: a.participants,
+      label: 'People we serve',
+      color: Brand.orange,
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PeopleListView(group: PeopleGroup.serve))),
+    );
+    final staff = _BigNumber(
+      key: const Key('stat-staff'),
+      value: a.staff,
+      label: 'Staff & volunteers',
+      color: Brand.blue,
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PeopleListView(group: PeopleGroup.staff))),
+    );
+    // With large text the two cards are too narrow side by side.
+    if (MediaQuery.textScalerOf(context).scale(16) / 16 > 1.25) {
+      return Column(children: [participants, const SizedBox(height: 12), staff]);
+    }
     return Row(
       children: [
-        Expanded(
-          child: _BigNumber(
-            key: const Key('stat-participants'),
-            value: a.participants,
-            label: 'People we serve',
-            color: Brand.orange,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PeopleListView(group: PeopleGroup.serve))),
-          ),
-        ),
+        Expanded(child: participants),
         const SizedBox(width: 12),
-        Expanded(
-          child: _BigNumber(
-            key: const Key('stat-staff'),
-            value: a.staff,
-            label: 'Staff & volunteers',
-            color: Brand.blue,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PeopleListView(group: PeopleGroup.staff))),
-          ),
-        ),
+        Expanded(child: staff),
       ],
     );
   }
