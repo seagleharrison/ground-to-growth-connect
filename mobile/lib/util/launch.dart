@@ -2,6 +2,10 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatf
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// Public pages the app stores require, served by our own server.
+const kPrivacyUrl = 'https://api.groundtogrowth.org/privacy';
+const kSupportUrl = 'https://api.groundtogrowth.org/support';
+
 /// Opens web links and phone calls. Kept in one place so a failure (no
 /// browser, no phone app) always ends with a plain message instead of nothing.
 class Launch {

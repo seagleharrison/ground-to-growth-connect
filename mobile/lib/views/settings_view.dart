@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../util/launch.dart';
 import '../util/phone.dart';
 import '../widgets/ui.dart';
 import 'account_type_sheet.dart';
@@ -197,6 +198,33 @@ class _SettingsViewState extends State<SettingsView> {
                 'Face ID or your passcode protects the app and your documents',
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        AppCard(
+          padding: EdgeInsets.zero,
+          // ListTile paints on the nearest Material, which a card's plain box isn't.
+          child: Material(
+            color: Colors.transparent,
+            child: Column(
+            children: [
+              ListTile(
+                key: const Key('open-privacy'),
+                leading: const Icon(Icons.policy_outlined, color: Colors.white60),
+                title: const Text('Privacy policy', style: TextStyle(fontWeight: FontWeight.w700)),
+                trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: Colors.white38),
+                onTap: () => Launch.link(context, kPrivacyUrl),
+              ),
+              const Divider(height: 1, color: Brand.outline),
+              ListTile(
+                key: const Key('open-support'),
+                leading: const Icon(Icons.help_outline_rounded, color: Colors.white60),
+                title: const Text('Support', style: TextStyle(fontWeight: FontWeight.w700)),
+                trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: Colors.white38),
+                onTap: () => Launch.link(context, kSupportUrl),
+              ),
+            ],
+            ),
           ),
         ),
         const SizedBox(height: 24),
