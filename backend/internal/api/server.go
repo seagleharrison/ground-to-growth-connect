@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"ground-to-growth-connect-backend/internal/blobstore"
+	"ground-to-growth-connect-backend/internal/pages"
 	"ground-to-growth-connect-backend/internal/push"
 )
 
@@ -87,6 +88,9 @@ func NewServer(db *sql.DB, docs blobstore.Store, opts ...Option) http.Handler {
 	mux.HandleFunc("DELETE /api/help-requests/{id}", s.withAuth(s.handleDeleteHelpRequest))
 	mux.HandleFunc("POST /api/help-requests/{id}/progress", s.withAuth(s.handleHelpProgress))
 	mux.HandleFunc("POST /api/help-requests/{id}/rating", s.withAuth(s.handleRateHelp))
+	// Public pages the app stores require.
+	mux.HandleFunc("GET /privacy", pages.Privacy())
+	mux.HandleFunc("GET /support", pages.Support())
 	mux.HandleFunc("GET /api/admin/people", s.withAuth(s.withAdmin(s.handlePeopleList)))
 	mux.HandleFunc("GET /api/admin/people/{id}", s.withAuth(s.withAdmin(s.handlePersonDetail)))
 	mux.HandleFunc("GET /api/admin/help-history", s.withAuth(s.withAdmin(s.handleHelpHistory)))

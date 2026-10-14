@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy · Ground to Growth Connect</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1b1d22; --muted:#5b6170; --line:#e3e5ea; --accent:#c4561a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b0d11; --fg:#eceef2; --muted:#a3a9b8; --line:#2c313b; --accent:#ffb578; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.6 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 2rem; line-height:1.2; margin: 0 0 4px; }
+  h2 { font-size: 1.25rem; margin: 2.2rem 0 .4rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+  p, li { color: var(--fg); }
+  .muted { color: var(--muted); }
+  a { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .box { border:1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 1rem 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Privacy Policy</h1>
+<p class="muted">Ground to Growth Connect · Last updated {{.Updated}}</p>
+
+<div class="box"><strong>In short:</strong> we collect only what the app needs to connect you with help. Your location and documents are shared only if you choose. We never sell your information, show ads, or use tracking tools. You can delete your account and data at any time.</div>
+
+<h2>Who we are</h2>
+<p>Ground to Growth Connect is an app from <strong>Ground to Growth Initiative</strong>, a community nonprofit in Savannah, Georgia, working to reduce homelessness and housing instability. In this policy, "we" means Ground to Growth Initiative.</p>
+<p>{{.OrgAddress}}{{if .ContactEmail}}<br>Email: <a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a>{{end}}</p>
+
+<h2>What we collect</h2>
+<ul>
+<li><strong>Your account.</strong> Your name, phone number and whether you are getting support, volunteering or staff. Optionally: email, gender and a profile photo. We keep a hashed (scrambled) recovery code so you can get back into your account on a new phone. We cannot read it.</li>
+<li><strong>Your location, only if you turn it on.</strong> An approximate location, rounded to a grid of about 200 meters, about every 15 minutes while sharing is on. You choose this separately, and you can switch it off any time.</li>
+<li><strong>Documents, only if you turn it on.</strong> Photos or scans of documents you choose to upload (for example an ID or Social Security card), and the type you say each one is.</li>
+<li><strong>Your calendar.</strong> Appointments and events you add. They are private to you.</li>
+<li><strong>Help requests.</strong> What you ask for (such as a ride, or basic items like socks or a blanket), an optional short note, and how it went. If you ask for a ride, volunteers and staff see that appointment's name, time and place, and nothing else on your calendar.</li>
+<li><strong>Messages</strong> between you and Ground to Growth admins.</li>
+<li><strong>Your phone's notification address,</strong> if you allow notifications, so we can alert you.</li>
+</ul>
+
+<h2>Who can see what</h2>
+<table>
+<tr><th>Information</th><th>You</th><th>Admins</th><th>Volunteers</th></tr>
+<tr><td>Your name, phone and profile details</td><td>Yes</td><td>Yes</td><td>Only your first name, and only on a request they are helping with</td></tr>
+<tr><td>Your approximate location</td><td>Yes</td><td>Yes, only if you turned it on</td><td>No</td></tr>
+<tr><td>Your documents</td><td>Yes</td><td>Only that a document of a type is on file. They cannot open it.</td><td>No</td></tr>
+<tr><td>Your calendar</td><td>Yes</td><td>No</td><td>No, except an appointment you ask for a ride to</td></tr>
+<tr><td>Your help requests</td><td>Yes</td><td>Yes</td><td>Yes, open requests and ones they accepted</td></tr>
+<tr><td>Your messages</td><td>Yes</td><td>Admins you write to. Admins may also review conversations to keep people safe.</td><td>No</td></tr>
+<tr><td>How a volunteer's help was rated</td><td>The rating you gave</td><td>Yes</td><td>No</td></tr>
+</table>
+<p>Whenever an admin reviews a conversation or opens someone's profile, that is permanently recorded so there is always a record of who looked and when.</p>
+
+<h2>How we protect it</h2>
+<ul>
+<li>Names, contact details, locations, documents, messages, calendar entries and notes are <strong>encrypted</strong> (AES-256) before they are saved.</li>
+<li>Everything travels over an encrypted connection (HTTPS).</li>
+<li>Each phone has its own sign-in key stored in the phone's secure storage. Face or fingerprint unlock can protect the app.</li>
+<li>The app does not back its data up to cloud backups.</li>
+</ul>
+
+<h2>Who else is involved</h2>
+<ul>
+<li><strong>Map tiles.</strong> The maps use OpenStreetMap. To draw a map, your phone asks OpenStreetMap's servers for the map pictures of the area you are viewing, which reveals your phone's internet address and the area, as with any map. We do not send them your account.</li>
+<li><strong>Notifications.</strong> To alert you, Apple (on iPhone) delivers a short generic message such as "You have a new message." It never contains the message itself or anyone's name.</li>
+<li><strong>Our server provider</strong> hosts our server. Your information is stored encrypted there.</li>
+</ul>
+<p>We do <strong>not</strong> sell your information, share it for advertising, or use analytics or tracking tools in the app. We may share information only if the law requires it, or if we believe someone is in immediate danger.</p>
+
+<h2>Your choices</h2>
+<ul>
+<li>Turn location sharing or document storage on or off at any time. Choosing not to never affects the help you can get.</li>
+<li>Delete any document, or edit or delete any calendar item, yourself.</li>
+<li>Delete everything: open <strong>Me</strong> in the app and tap <strong>Delete my data</strong>. This permanently removes your account, documents, location history, calendar, requests and messages.</li>
+<li>Or contact us at the address above and we will do it for you.</li>
+</ul>
+
+<h2>How long we keep it</h2>
+<p>We keep information only as long as it is needed to support you, or until you delete it or close your account.</p>
+
+<h2>Children</h2>
+<p>The app is not meant for children under 13, and we do not knowingly collect information from them. If you believe a child has signed up, contact us and we will remove the account.</p>
+
+<h2>Not for emergencies</h2>
+<p>This app is not an emergency service. In an emergency, call <strong>911</strong>. If you are in crisis or having thoughts of hurting yourself, call or text <strong>988</strong>.</p>
+
+<h2>Changes</h2>
+<p>If we change this policy in a way that matters, we will update the date above and tell people in the app.</p>
+
+<h2>Contact</h2>
+<p>Questions or requests about your information: {{.OrgAddress}}{{if .ContactEmail}}, or <a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a>{{end}}.</p>
+</main>
+</body>
+</html>

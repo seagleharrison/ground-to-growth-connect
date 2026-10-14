@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -486,5 +487,15 @@ func TestAVolunteersSharedLocationIsVisibleToAdminsOnly(t *testing.T) {
 	locations := body["locations"].([]interface{})
 	if len(locations) != 1 || locations[0].(map[string]interface{})["userId"] != idOf(samU) {
 		t.Fatalf("the admin should see the volunteer who chose to share, got %v", locations)
+	}
+}
+
+func TestThePublicPagesNeedNoSignIn(t *testing.T) {
+	h := newTestServer(t)
+	for _, path := range []string{"/privacy", "/support"} {
+		rec := doRequest(t, h, http.MethodGet, path, "", nil)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Ground to Growth") {
+			t.Fatalf("%s should be public, got %d", path, rec.Code)
+		}
 	}
 }

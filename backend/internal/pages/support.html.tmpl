@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support · Ground to Growth Connect</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1b1d22; --muted:#5b6170; --line:#e3e5ea; --accent:#c4561a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b0d11; --fg:#eceef2; --muted:#a3a9b8; --line:#2c313b; --accent:#ffb578; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.6 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 2rem; line-height:1.2; margin: 0 0 4px; }
+  h2 { font-size: 1.2rem; margin: 2rem 0 .3rem; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<h1>Support</h1>
+<p class="muted">Ground to Growth Connect</p>
+
+<h2>I need help right now</h2>
+<p>In an emergency, call <strong>911</strong>. If you are in crisis, call or text <strong>988</strong>. It is free and always open.</p>
+
+<h2>I have a question or a problem with the app</h2>
+<p>Contact Ground to Growth Initiative:<br>{{.OrgAddress}}{{if .ContactEmail}}<br>Email: <a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a>{{end}}</p>
+
+<h2>I lost my phone or changed numbers</h2>
+<p>On the sign-in screen choose <strong>I already have an account</strong> and enter the recovery code you were shown when you signed up.</p>
+
+<h2>I want to delete my data</h2>
+<p>Open <strong>Me</strong> in the app and tap <strong>Delete my data</strong>. Or contact us and we will do it for you. See our <a href="/privacy">Privacy Policy</a>.</p>
+</main>
+</body>
+</html>
