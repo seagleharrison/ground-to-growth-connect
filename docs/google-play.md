@@ -89,3 +89,19 @@ This app is not an emergency service. In an emergency call 911. If you are in cr
 ## 6. Then
 - Internal testing has no review wait and no 12-tester rule, so you can test right away.
 - For a public release later: **Production → Create release** (or **Closed testing first** if you chose a Personal account).
+
+
+## 7. The background-location video (Google asks for this)
+A short screen recording, under 30 seconds, no sound needed. Record it on your phone (swipe down from the top, tap **Screen record**). Steps to show:
+1. Open the app and go to the **Home** screen where it says "Location sharing is off".
+2. Tap **Turn on sharing**. The **consent screen** appears. Scroll it briefly and tap the agree button.
+3. When Android asks for location, choose **Allow all the time** (if shown, otherwise **While using the app**, then open the app's settings and choose Allow all the time).
+4. Show the Home screen now saying **Sharing your location**.
+5. Pull down the notification shade to show the **"Sharing your location" notification**.
+6. Stop the recording.
+Upload it to YouTube as **Unlisted** and paste the link in the Play Console location declaration.
+
+Short answer to "why does the app need background location": *The app lets a person choose to share their approximate location (rounded to about 200 meters, roughly every 15 minutes) with Ground to Growth outreach admins, so the team can find them and bring help even when the app is closed. It's off by default, needs explicit consent, can be turned off at any time, and shows a persistent notification while on.*
+
+## 8. App access (the reviewer form)
+Pick **"All or some functionality is restricted"** and say: *Anyone can create an account. On the first screen choose "Getting support," enter any name and a phone number, and tap Create account. Staff and volunteer screens need an invitation code we hold privately; these are not needed to review the main features.* No demo password is needed because the app has no passwords.
