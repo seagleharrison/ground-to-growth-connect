@@ -499,3 +499,39 @@ func TestThePublicPagesNeedNoSignIn(t *testing.T) {
 		}
 	}
 }
+
+// Location sharing and document storage are separate consents. Turning
+// location sharing off must hide a person from the map even if they still
+// have document storage turned on.
+func TestTheMapOnlyShowsPeopleWhoHaveLocationConsentOn(t *testing.T) {
+	h := newTestServer(t)
+	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	ada, _ := newAdmin(t, h)
+	visible := func() int {
+		var body map[string]interface{}
+		decodeJSON(t, doRequest(t, h, http.MethodGet, "/api/locations/latest", ada, nil), &body)
+		list, _ := body["locations"].([]interface{})
+		n := 0
+		for _, l := range list {
+			if asMap(t, l)["name"] == "Jane Doe" {
+				n++
+			}
+		}
+		return n
+	}
+
+	doRequest(t, h, http.MethodPost, "/api/consent/documents", jane, map[string]interface{}{"granted": true})
+	if visible() != 0 {
+		t.Fatalf("document consent alone must never put someone on the map")
+	}
+	doRequest(t, h, http.MethodPost, "/api/consent", jane, map[string]interface{}{"granted": true})
+	doRequest(t, h, http.MethodPost, "/api/locations", jane, map[string]interface{}{"latitude": 32.08, "longitude": -81.09})
+	if visible() != 1 {
+		t.Fatalf("someone sharing their location should appear exactly once")
+	}
+	// Location sharing off, document storage still on: gone from the map.
+	doRequest(t, h, http.MethodPost, "/api/consent", jane, map[string]interface{}{"granted": false})
+	if visible() != 0 {
+		t.Fatalf("someone who turned location sharing off must not stay on the map just because document storage is on")
+	}
+}

@@ -643,13 +643,13 @@ func (s *Server) handleLatestLocations(w http.ResponseWriter, r *http.Request) {
 		    ) AS rn
 		  FROM location_reports lr
 		  JOIN users u ON u.id = lr.user_id
-		  JOIN user_consent_status cs ON cs.user_id = u.id AND cs.granted = 1
+		  JOIN user_consent_status cs ON cs.user_id = u.id AND cs.granted = 1 AND cs.consent_type = ?
 		  -- Everyone who is sharing shows up here: participants, and staff who
 		  -- turned on their own sharing so other staff can find them in the
 		  -- field — including the viewer themselves, so a staff member can
 		  -- confirm their own sharing the same way they'd check anyone else's.
 		)
-		WHERE rn = 1`)
+		WHERE rn = 1`, consentTypeLocation)
 	if err != nil {
 		writeInternalError(w, err)
 		return
