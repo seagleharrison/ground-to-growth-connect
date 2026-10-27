@@ -34,8 +34,11 @@ func TestNewVolunteerSeesNothingUntilAnAdminApprovesThem(t *testing.T) {
 	if code := send(t, h, sam, idOf(janeU), "hi"); code != http.StatusForbidden {
 		t.Fatalf("message by an unapproved volunteer: expected 403, got %d", code)
 	}
-	if len(conversations(t, h, sam)) != 0 {
-		t.Fatalf("an unapproved volunteer should have no contacts")
+	// The only people they can write to are the admins, so the team can welcome them.
+	for _, c := range conversations(t, h, sam) {
+		if c["role"] != "team" {
+			t.Fatalf("an unapproved volunteer may only have the team as contacts, got %v", c)
+		}
 	}
 
 	// Only an admin can approve.

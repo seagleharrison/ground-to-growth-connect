@@ -124,13 +124,31 @@ func TestChatOnlyRunsThroughAdmins(t *testing.T) {
 	}
 }
 
-func TestAVolunteerNotYetApprovedCannotChat(t *testing.T) {
+func TestAVolunteerNotYetApprovedCanChatOnlyWithAdmins(t *testing.T) {
 	h := newTestServer(t)
-	pending, _ := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode, "_unapproved": true})
-	_, adaU := newAdmin(t, h)
-	if code := send(t, h, pending, idOf(adaU), "hi"); code != http.StatusForbidden {
-		t.Fatalf("unapproved volunteer: expected 403, got %d", code)
+	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
+	pending, pendingU := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode, "_unapproved": true})
+	other, otherU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
+	ada, adaU := newAdmin(t, h)
+
+	// The team can welcome them, and they can answer.
+	if code := send(t, h, ada, idOf(pendingU), "Welcome Pat, we'll approve you shortly"); code != http.StatusCreated {
+		t.Fatalf("admin to a volunteer waiting for approval: expected 201, got %d", code)
 	}
+	if code := send(t, h, pending, idOf(adaU), "Thank you"); code != http.StatusCreated {
+		t.Fatalf("a volunteer waiting for approval replying to an admin: expected 201, got %d", code)
+	}
+	// But nobody else.
+	if code := send(t, h, pending, idOf(janeU), "hi"); code != http.StatusForbidden {
+		t.Fatalf("to a participant: expected 403, got %d", code)
+	}
+	if code := send(t, h, pending, idOf(otherU), "hi"); code != http.StatusForbidden {
+		t.Fatalf("to another volunteer: expected 403, got %d", code)
+	}
+	if code := send(t, h, jane, idOf(pendingU), "hi"); code != http.StatusForbidden {
+		t.Fatalf("a participant to them: expected 403, got %d", code)
+	}
+	_, _ = other, ada
 }
 
 func TestChatIsPrivateBetweenTheTwoPeople(t *testing.T) {
@@ -176,7 +194,7 @@ func TestMessagesAreEncryptedAndValidated(t *testing.T) {
 	}
 }
 
-func TestVolunteersCannotMessageEachOtherAndNobodyMessagesThemselves(t *testing.T) {
+func TestAdminsCanChatWithEachOtherButVolunteersCannotChatWithEachOtherOrThemselves(t *testing.T) {
 	h := newTestServer(t)
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
 	_, patU := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode})
@@ -185,10 +203,12 @@ func TestVolunteersCannotMessageEachOtherAndNobodyMessagesThemselves(t *testing.
 	if code := send(t, h, sam, idOf(patU), "hi"); code != http.StatusForbidden {
 		t.Fatalf("volunteer to volunteer: expected 403, got %d", code)
 	}
-	if code := send(t, h, ada, idOf(benU), "hi"); code != http.StatusForbidden {
-		t.Fatalf("admin to admin: expected 403, got %d", code)
+	if code := send(t, h, ada, idOf(benU), "hi"); code != http.StatusCreated {
+		t.Fatalf("admin to admin: expected 201, got %d", code)
 	}
-	_ = adaU
+	if code := send(t, h, ada, idOf(adaU), "hi"); code != http.StatusForbidden {
+		t.Fatalf("an admin to themselves: expected 403, got %d", code)
+	}
 	if code := send(t, h, sam, idOf(samU), "hi"); code != http.StatusForbidden {
 		t.Fatalf("to self: expected 403, got %d", code)
 	}

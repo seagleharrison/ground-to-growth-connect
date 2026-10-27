@@ -64,23 +64,17 @@ func (s *Server) hasThread(a, b string) (bool, error) {
 	return n > 0, err
 }
 
-// canMessage says whether two people may chat right now. Chat only runs
-// through Ground to Growth admins: an admin can talk with any participant and
-// with any approved volunteer, and nobody else can talk to each other, so
-// volunteers and participants never have a private line between them. Blocks
-// and an admin switching someone's messaging off always win.
+// canMessage says whether two people may chat right now. Chat runs through
+// Ground to Growth admins: an admin can talk with anyone (participants,
+// volunteers including ones still waiting for approval, and other admins), and
+// everyone else can talk only with an admin, so volunteers and participants
+// never have a private line between them. Blocks and an admin switching
+// someone's messaging off always win.
 func (s *Server) canMessage(a, b *personRef) (bool, error) {
 	if a.ID == b.ID || a.Disabled || b.Disabled {
 		return false, nil
 	}
-	if (a.Type == "admin") == (b.Type == "admin") {
-		return false, nil
-	}
-	other := a
-	if a.Type == "admin" {
-		other = b
-	}
-	if other.Type == "volunteer" && !other.Approved {
+	if a.Type != "admin" && b.Type != "admin" {
 		return false, nil
 	}
 	if blocked, err := s.isBlocked(a.ID, b.ID); err != nil || blocked {
@@ -123,10 +117,6 @@ func displayName(viewerIsStaff bool, other *personRef) string {
 func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 	v := userFromCtx(r)
 	viewerStaff := isStaff(v.PersonType)
-	if viewerStaff && !v.canActAsStaff() {
-		writeJSON(w, http.StatusOK, map[string]interface{}{"conversations": []conversationJSON{}})
-		return
-	}
 	viewerRef := refFromAuth(v)
 
 	candidates := map[string]bool{}
@@ -254,10 +244,6 @@ func (s *Server) allowedWith(w http.ResponseWriter, v *authUser, otherID string,
 	}
 	if other == nil {
 		writeError(w, http.StatusNotFound, "Not found")
-		return nil, false, false
-	}
-	if isStaff(v.PersonType) && !v.canActAsStaff() {
-		writeError(w, http.StatusForbidden, "An admin needs to approve your volunteer account before you can do this.")
 		return nil, false, false
 	}
 	canSend, err := s.canMessage(refFromAuth(v), other)
