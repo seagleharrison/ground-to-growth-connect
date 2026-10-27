@@ -42,7 +42,7 @@ void _withApi(String description, Future<void> Function(WidgetTester tester, Fak
   });
 }
 
-Future<void> _openAnalytics(WidgetTester tester, FakeApi api, {String personType = 'admin'}) async {
+Future<void> _openAnalytics(WidgetTester tester, FakeApi api, {String personType = 'admin', AppTab start = AppTab.analytics}) async {
   tester.view.physicalSize = const Size(1200, 4200);
   tester.view.devicePixelRatio = 2.0;
   addTearDown(tester.view.reset);
@@ -55,7 +55,7 @@ Future<void> _openAnalytics(WidgetTester tester, FakeApi api, {String personType
   await tester.pumpWidget(MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: state),
-      ChangeNotifierProvider(create: (_) => TabNav(current: AppTab.analytics)),
+      ChangeNotifierProvider(create: (_) => TabNav(current: start)),
     ],
     child: MaterialApp(theme: buildAppTheme(), darkTheme: buildAppTheme(), themeMode: ThemeMode.dark, home: const MainTabView()),
   ));
@@ -171,5 +171,45 @@ void main() {
     await _openAnalytics(tester, api, personType: 'volunteer');
     expect(find.byKey(const Key('stat-participants')), findsNothing);
     expect(api.routes.where((r) => r.contains('/api/admin/people')), isEmpty);
+  });
+
+  _withApi('an admin can start a chat with anyone from New message', (tester, api) async {
+    await _openAnalytics(tester, api, start: AppTab.messages);
+    await tester.tap(find.byKey(const Key('new-message')));
+    await _settle(tester);
+
+    // People we serve first, and you aren't on your own list.
+    expect(find.byKey(const Key('person-p1')), findsOneWidget);
+    expect(find.byKey(const Key('person-p2')), findsOneWidget);
+
+    // Staff too: other admins and volunteers waiting for approval.
+    await tester.tap(find.text('Staff & volunteers'));
+    await _settle(tester);
+    expect(find.byKey(const Key('person-a1')), findsOneWidget);
+    expect(find.byKey(const Key('person-v2')), findsOneWidget);
+    expect(find.byKey(const Key('person-p1')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('person-a1')));
+    await _settle(tester);
+    await tester.enterText(find.byKey(const Key('chat-input')), 'Welcome to the team');
+    await tester.tap(find.byKey(const Key('chat-send')));
+    await _settle(tester);
+    expect(api.routes, contains('POST /api/messages/a1'));
+    expect(find.text('Welcome to the team'), findsOneWidget);
+  });
+
+  _withApi('New message can be searched, and is only for admins', (tester, api) async {
+    await _openAnalytics(tester, api, start: AppTab.messages);
+    await tester.tap(find.byKey(const Key('new-message')));
+    await _settle(tester);
+    await tester.enterText(find.byKey(const Key('people-search')), 'bob');
+    await tester.pump();
+    expect(find.byKey(const Key('person-p2')), findsOneWidget);
+    expect(find.byKey(const Key('person-p1')), findsNothing);
+  });
+
+  _withApi('a volunteer has no New message button', (tester, api) async {
+    await _openAnalytics(tester, api, personType: 'volunteer', start: AppTab.messages);
+    expect(find.byKey(const Key('new-message')), findsNothing);
   });
 }

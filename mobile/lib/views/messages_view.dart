@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../util/time.dart';
 import '../widgets/ui.dart';
 import 'chat_view.dart';
+import 'people_view.dart';
 import 'safety_view.dart';
 
 void openChat(BuildContext context, Conversation contact) {
@@ -125,6 +126,16 @@ class _MessagesViewState extends State<MessagesView> with ConversationPolling {
     return LargeTitlePage(
       title: 'Messages',
       onRefresh: chat.refreshConversations,
+      actions: [
+        // Admins can start a chat with anyone registered.
+        if (app.currentView == AppView.admin)
+          IconButton(
+            key: const Key('new-message'),
+            tooltip: 'New message',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NewMessageView())),
+            icon: const Icon(Icons.edit_square, size: 26),
+          ),
+      ],
       children: [
         if (app.currentView == AppView.admin)
           Padding(

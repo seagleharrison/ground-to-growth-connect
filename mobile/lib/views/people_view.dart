@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../app_state.dart';
 import '../models/models.dart';
 import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 import '../util/time.dart';
 import '../widgets/ui.dart';
+import 'chat_view.dart';
 
 /// Which of the two lists to open from Analytics.
 enum PeopleGroup {
@@ -44,15 +47,31 @@ String _standing(PersonSummary p) {
 
 /// Everyone registered in one group, newest first, with a search box. Tap a
 /// person to open their profile.
-class PeopleListView extends StatefulWidget {
+class PeopleListView extends StatelessWidget {
   final PeopleGroup group;
   const PeopleListView({super.key, required this.group});
 
   @override
-  State<PeopleListView> createState() => _PeopleListViewState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(backgroundColor: Brand.background, title: Text(group.title, style: const TextStyle(fontWeight: FontWeight.w800))),
+      body: PeopleListBody(group: group),
+    );
+  }
 }
 
-class _PeopleListViewState extends State<PeopleListView> {
+/// The searchable list itself. With [onSelect] a tap hands the person back
+/// (to start a chat, say); without it a tap opens their profile.
+class PeopleListBody extends StatefulWidget {
+  final PeopleGroup group;
+  final ValueChanged<PersonSummary>? onSelect;
+  const PeopleListBody({super.key, required this.group, this.onSelect});
+
+  @override
+  State<PeopleListBody> createState() => _PeopleListBodyState();
+}
+
+class _PeopleListBodyState extends State<PeopleListBody> {
   List<PersonSummary>? _people;
   String? _error;
   String _query = '';
@@ -81,10 +100,10 @@ class _PeopleListViewState extends State<PeopleListView> {
   Widget build(BuildContext context) {
     final all = _people;
     final q = _query.trim().toLowerCase();
-    final shown = all == null ? const <PersonSummary>[] : [for (final p in all) if (q.isEmpty || p.name.toLowerCase().contains(q)) p];
-    return Scaffold(
-      appBar: AppBar(backgroundColor: Brand.background, title: Text(widget.group.title, style: const TextStyle(fontWeight: FontWeight.w800))),
-      body: RefreshIndicator(
+    // When picking someone to write to, you aren't on your own list.
+    final me = widget.onSelect == null ? null : context.read<AppState>().user?.id;
+    final shown = all == null ? const <PersonSummary>[] : [for (final p in all) if (p.userId != me && (q.isEmpty || p.name.toLowerCase().contains(q))) p];
+    return RefreshIndicator(
         onRefresh: _load,
         child: ListView(
           key: const Key('people-list'),
@@ -127,7 +146,9 @@ class _PeopleListViewState extends State<PeopleListView> {
                 child: AppCard(
                   key: Key('person-${p.userId}'),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PersonDetailView(summary: p))),
+                  onTap: () => widget.onSelect != null
+                      ? widget.onSelect!(p)
+                      : Navigator.of(context).push(MaterialPageRoute(builder: (_) => PersonDetailView(summary: p))),
                   child: Row(
                     children: [
                       _Initial(name: p.name, role: p.role),
@@ -145,13 +166,55 @@ class _PeopleListViewState extends State<PeopleListView> {
                           ],
                         ),
                       ),
-                      const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                      Icon(widget.onSelect != null ? Icons.chat_bubble_outline_rounded : Icons.chevron_right_rounded, color: Colors.white38),
                     ],
                   ),
                 ),
               ),
           ],
         ),
+    );
+  }
+}
+
+/// Admins only: pick anyone registered and start a chat with them.
+class NewMessageView extends StatefulWidget {
+  const NewMessageView({super.key});
+
+  @override
+  State<NewMessageView> createState() => _NewMessageViewState();
+}
+
+class _NewMessageViewState extends State<NewMessageView> {
+  PeopleGroup _group = PeopleGroup.serve;
+
+  void _pick(PersonSummary p) {
+    // Chats are with the team: a person getting support, or staff.
+    final contact = Conversation(userId: p.userId, name: p.name, role: p.role == 'participant' ? 'participant' : 'team');
+    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => ChatView(contact: contact)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(backgroundColor: Brand.background, title: const Text('New message', style: TextStyle(fontWeight: FontWeight.w800))),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<PeopleGroup>(
+                key: const Key('new-message-groups'),
+                showSelectedIcon: false,
+                segments: [for (final g in PeopleGroup.values) ButtonSegment(value: g, label: Text(g.title))],
+                selected: {_group},
+                onSelectionChanged: (v) => setState(() => _group = v.first),
+              ),
+            ),
+          ),
+          Expanded(child: PeopleListBody(key: ValueKey(_group), group: _group, onSelect: _pick)),
+        ],
       ),
     );
   }
