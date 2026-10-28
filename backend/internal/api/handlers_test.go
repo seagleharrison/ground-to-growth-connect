@@ -97,25 +97,44 @@ func TestRegisterRejectsInvalidGender(t *testing.T) {
 	}
 }
 
-func TestRegisterStaffWithoutCodeRejected(t *testing.T) {
+func TestRegisterAdminWithoutCodeRejected(t *testing.T) {
+	h := newTestServer(t)
+	rec := doRequest(t, h, http.MethodPost, "/api/users", "", map[string]interface{}{
+		"name": "Ada Admin", "phone": "912-555-0100", "personType": "admin",
+	})
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without an invite code, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRegisterAdminWithWrongCodeRejected(t *testing.T) {
+	h := newTestServer(t)
+	rec := doRequest(t, h, http.MethodPost, "/api/users", "", map[string]interface{}{
+		"name": "Ada Admin", "phone": "912-555-0100", "personType": "admin", "staffCode": "wrong-code",
+	})
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 with a wrong invite code, got %d", rec.Code)
+	}
+}
+
+func TestAVolunteerSignsUpWithoutACodeButSeesNothingUntilApproved(t *testing.T) {
 	h := newTestServer(t)
 	rec := doRequest(t, h, http.MethodPost, "/api/users", "", map[string]interface{}{
 		"name": "Outreach Sam", "phone": "912-555-0100", "personType": "volunteer",
 	})
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 without staff code, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("a volunteer needs no code: expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
-}
-
-func TestRegisterStaffWithWrongCodeRejected(t *testing.T) {
-	h := newTestServer(t)
-	rec := doRequest(t, h, http.MethodPost, "/api/users", "", map[string]interface{}{
-		"name": "Outreach Sam", "phone": "912-555-0100", "personType": "volunteer", "staffCode": "wrong-code",
-	})
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 with wrong staff code, got %d", rec.Code)
+	var out map[string]interface{}
+	decodeJSON(t, rec, &out)
+	token := out["token"].(string)
+	if code := doRequest(t, h, http.MethodGet, "/api/help-requests", token, nil).Code; code != http.StatusForbidden {
+		t.Fatalf("an unapproved volunteer must not reach the help list, got %d", code)
+	}
+	if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", token, nil).Code; code != http.StatusForbidden {
+		t.Fatalf("a volunteer must not reach the people map, got %d", code)
 	}
 }
 

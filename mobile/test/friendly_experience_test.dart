@@ -37,12 +37,12 @@ void main() {
       expect(state.showWelcome, isFalse);
     });
 
-    test('a wrong staff code says so kindly', () async {
+    test('a wrong admin code says so kindly', () async {
       final state = await _registerWith(
-        MockClient((_) async => _json({'error': 'A valid staff invite code is required for staff accounts.'}, 403)),
+        MockClient((_) async => _json({'error': 'A valid invite code is required for admin accounts.'}, 403)),
         request: _request(type: 'admin', code: 'nope'),
       );
-      expect(state.errorMessage, contains("staff code doesn't look right"));
+      expect(state.errorMessage, contains("admin code doesn't look right"));
     });
 
     test('a server crash is not shown as "Internal server error"', () async {

@@ -33,8 +33,9 @@ func profilePictureKey(userID string) string {
 // optional; name and phone can't be emptied, same as at sign-up).
 //
 // PersonType changes the account type. Account type decides who can see other
-// people's locations, so moving *into* a staff role needs the same staff invite
-// code as signing up as staff; moving back to a participant account is free.
+// people's locations, so moving *into* the admin role needs the same invite
+// code as signing up as an admin. A volunteer needs no code (an admin approves
+// them before they see anything); moving back to a participant account is free.
 type updateProfileRequest struct {
 	Name       *string `json:"name"`
 	Email      *string `json:"email"`
@@ -60,13 +61,13 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, fmt.Sprintf("personType must be one of: %s", strings.Join(personTypes, ", ")))
 			return
 		}
-		if isStaff(requested) {
+		if needsInviteCode(requested) {
 			code := ""
 			if body.StaffCode != nil {
 				code = *body.StaffCode
 			}
 			if !validStaffCode(code) {
-				writeError(w, http.StatusForbidden, "A valid staff invite code is required for staff accounts.")
+				writeError(w, http.StatusForbidden, "A valid invite code is required for admin accounts.")
 				return
 			}
 		}

@@ -26,6 +26,10 @@ class _RegisterViewState extends State<RegisterView> {
 
   PersonType get _personType => _isStaff ? _staffType : PersonType.homeless;
 
+  /// Only admins need the invite code. A volunteer signs up freely and sees
+  /// nothing until an admin approves them.
+  bool get _needsCode => _isStaff && _staffType == PersonType.admin;
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -38,7 +42,7 @@ class _RegisterViewState extends State<RegisterView> {
   bool _canSubmit(AppState app) {
     final nameOk = _nameController.text.trim().isNotEmpty;
     final phoneOk = _phoneController.text.trim().isNotEmpty;
-    final staffOk = !_isStaff || _staffCodeController.text.trim().isNotEmpty;
+    final staffOk = !_needsCode || _staffCodeController.text.trim().isNotEmpty;
     return nameOk && phoneOk && staffOk && !app.isLoading;
   }
 
@@ -50,7 +54,7 @@ class _RegisterViewState extends State<RegisterView> {
       gender: (_gender ?? Gender.preferNotToSay).wireValue,
       phone: _phoneController.text.trim(),
       personType: _personType.name,
-      staffCode: _isStaff ? _staffCodeController.text.trim() : null,
+      staffCode: _needsCode ? _staffCodeController.text.trim() : null,
     ));
   }
 
@@ -262,20 +266,25 @@ class _RegisterViewState extends State<RegisterView> {
                         ],
                       ),
                       const SizedBox(height: 14),
-                      TextField(
-                        controller: _staffCodeController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Staff invite code',
-                          prefixIcon: Icon(Icons.key_rounded),
+                      if (_needsCode)
+                        TextField(
+                          key: const Key('staff-code-field'),
+                          controller: _staffCodeController,
+                          obscureText: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Admin invite code',
+                            prefixIcon: Icon(Icons.key_rounded),
+                          ),
+                          onChanged: (_) => setState(() {}),
                         ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8, left: 4),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8, left: 4),
                         child: Text(
-                          'Staff can see where participants are. Ask Ground to Growth for the code.',
-                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                          _needsCode
+                              ? 'Admins see the map and every request. Ask Ground to Growth for the code.'
+                              : 'No code needed. An admin approves each volunteer before they can see anything.',
+                          key: const Key('staff-role-note'),
+                          style: const TextStyle(color: Colors.white54, fontSize: 13),
                         ),
                       ),
                     ],

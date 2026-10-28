@@ -55,19 +55,36 @@ void main() {
     expect(find.text('Current'), findsOneWidget);
   });
 
-  _withFakeApi('Switching to staff asks for the code, refuses a wrong one, and accepts the right one', (tester, api) async {
+  _withFakeApi('Switching to volunteer needs no code', (tester, api) async {
     final state = await _pumpSettings(tester, api);
     await _openSheet(tester);
 
     await tester.tap(find.byKey(const Key('type-volunteer')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('staff-code-field')), findsOneWidget, reason: 'staff roles need the invite code');
+    expect(find.byKey(const Key('staff-code-field')), findsNothing, reason: 'volunteers are approved by an admin instead');
+    expect(find.textContaining('No code needed'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('account-type-save')));
+    await tester.pumpAndSettle();
+
+    expect(state.user!.personType, 'volunteer');
+    expect(api.user['personType'], 'volunteer');
+    expect(find.byKey(const Key('account-type-error')), findsNothing);
+  });
+
+  _withFakeApi('Switching to admin asks for the code, refuses a wrong one, and accepts the right one', (tester, api) async {
+    final state = await _pumpSettings(tester, api);
+    await _openSheet(tester);
+
+    await tester.tap(find.byKey(const Key('type-admin')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('staff-code-field')), findsOneWidget, reason: 'admins need the invite code');
 
     await tester.enterText(find.byKey(const Key('staff-code-field')), 'not-the-code');
     await tester.pump();
     await tester.tap(find.byKey(const Key('account-type-save')));
     await tester.pumpAndSettle();
-    expect(find.textContaining("staff code doesn't look right"), findsOneWidget, reason: 'a friendly explanation, not a raw error');
+    expect(find.textContaining("admin code doesn't look right"), findsOneWidget, reason: 'a friendly explanation, not a raw error');
     expect(find.byKey(const Key('account-type-error')), findsOneWidget);
     expect(state.user!.personType, 'homeless', reason: 'a refused switch changes nothing');
     expect(api.user['personType'], 'homeless');
@@ -77,11 +94,11 @@ void main() {
     await tester.tap(find.byKey(const Key('account-type-save')));
     await tester.pumpAndSettle();
 
-    expect(state.user!.personType, 'volunteer');
+    expect(state.user!.personType, 'admin');
     expect(state.user!.isStaff, isTrue);
-    expect(api.user['personType'], 'volunteer');
+    expect(api.user['personType'], 'admin');
     expect(find.byKey(const Key('account-type-error')), findsNothing);
-    expect(find.text('Getting support'), findsNothing, reason: 'the sheet closes after switching');
+    expect(find.byKey(const Key('account-type-save')), findsNothing, reason: 'the sheet closes after switching');
   });
 
   _withFakeApi('A staff member can switch back to getting support without any code', (tester, api) async {

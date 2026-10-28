@@ -254,8 +254,8 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Switches between a participant account and a staff role. Moving into a
-  /// staff role needs the staff invite code. Returns null on success, or a
+  /// Switches between a participant account and a staff role. Moving into the
+  /// admin role needs the invite code; a volunteer needs none. Returns null on success, or a
   /// message that can be shown to the person.
   Future<String?> changeAccountType(PersonType type, {String? staffCode}) async {
     isSavingProfile = true;
@@ -264,7 +264,7 @@ class AppState extends ChangeNotifier {
     try {
       final updated = await ApiClient.shared.updateProfile(
         personType: type.name,
-        staffCode: type.isStaff ? staffCode : null,
+        staffCode: type == PersonType.admin ? staffCode : null,
       );
       user = updated;
       await SecureStorageService.saveUser(updated);

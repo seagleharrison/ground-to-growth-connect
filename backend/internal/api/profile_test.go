@@ -368,12 +368,12 @@ func patchMeStatus(t *testing.T, h http.Handler, token string, body map[string]i
 	return doRequest(t, h, http.MethodPatch, "/api/me", token, body).Code
 }
 
-func TestChangeToStaffNeedsTheStaffCode(t *testing.T) {
+func TestChangeToAdminNeedsTheInviteCodeButVolunteerDoesNot(t *testing.T) {
 	h := newTestServer(t)
 	token, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 
 	for name, body := range map[string]map[string]interface{}{
-		"no code":    {"personType": "volunteer"},
+		"no code":    {"personType": "admin"},
 		"wrong code": {"personType": "admin", "staffCode": "wrong-code"},
 	} {
 		if code := patchMeStatus(t, h, token, body); code != http.StatusForbidden {
@@ -386,6 +386,14 @@ func TestChangeToStaffNeedsTheStaffCode(t *testing.T) {
 	}
 	if code := doRequest(t, h, http.MethodGet, "/api/locations/latest", token, nil).Code; code != http.StatusForbidden {
 		t.Fatalf("still a participant, so the staff map must stay closed: got %d", code)
+	}
+
+	// Becoming a volunteer needs no code, and starts unapproved.
+	if code := patchMeStatus(t, h, token, map[string]interface{}{"personType": "volunteer"}); code != http.StatusOK {
+		t.Fatalf("volunteer without a code: expected 200, got %d", code)
+	}
+	if code := doRequest(t, h, http.MethodGet, "/api/help-requests", token, nil).Code; code != http.StatusForbidden {
+		t.Fatalf("a new volunteer must wait for approval, got %d", code)
 	}
 }
 

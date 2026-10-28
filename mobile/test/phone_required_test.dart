@@ -50,6 +50,29 @@ void main() {
       await tester.pump();
       expect(enabled(), isFalse, reason: 'a blank phone (just spaces) must not count');
     });
+
+    testWidgets('a volunteer needs no code to sign up, but an admin does', (tester) async {
+      await pump(tester);
+      Finder button() => find.byType(GradientButton);
+      bool enabled() => tester.widget<GradientButton>(button()).onPressed != null;
+      await tester.enterText(find.widgetWithText(TextField, 'Full name'), 'Sam Helper');
+      await tester.enterText(find.widgetWithText(TextField, 'Phone'), '912-555-0100');
+      await tester.tap(find.byKey(const Key('role-staff')));
+      await tester.pumpAndSettle();
+
+      // Volunteer is the default staff role: no code field, and Create is on.
+      expect(find.byKey(const Key('staff-code-field')), findsNothing);
+      expect(find.textContaining('No code needed'), findsOneWidget);
+      expect(enabled(), isTrue);
+
+      await tester.tap(find.byKey(const Key('staff-type-admin')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('staff-code-field')), findsOneWidget);
+      expect(enabled(), isFalse, reason: 'an admin needs the invite code first');
+      await tester.enterText(find.byKey(const Key('staff-code-field')), 'g2gconnect');
+      await tester.pump();
+      expect(enabled(), isTrue);
+    });
   });
 
   group('edit profile', () {

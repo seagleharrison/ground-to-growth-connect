@@ -113,7 +113,7 @@ class FakeApi {
   /// When set, POST /api/documents fails with this error message.
   String? failUploadsWith;
 
-  /// The staff invite code this fake accepts when switching to a staff role.
+  /// The invite code this fake accepts when becoming an admin (volunteers need none).
   static const staffCode = 'g2g-test';
 
   /// When set, PATCH /api/me fails with this error message.
@@ -186,8 +186,8 @@ class FakeApi {
       final phone = (body['phone'] as String? ?? '').trim();
       if (phone.isEmpty) return _json({'error': 'phone is required'}, status: 400);
       final personType = (body['personType'] as String?) ?? 'homeless';
-      if (personType != 'homeless' && body['staffCode'] != staffCode) {
-        return _json({'error': 'A valid staff invite code is required for staff accounts.'}, status: 403);
+      if (personType == 'admin' && body['staffCode'] != staffCode) {
+        return _json({'error': 'A valid invite code is required for admin accounts.'}, status: 403);
       }
       user = {
         'id': 'u1',
@@ -472,8 +472,8 @@ class FakeApi {
         }
         final requestedType = body['personType'] as String?;
         if (requestedType != null && requestedType != user['personType']) {
-          if (requestedType != 'homeless' && body['staffCode'] != staffCode) {
-            return _json({'error': 'A valid staff invite code is required for staff accounts.'}, status: 403);
+          if (requestedType == 'admin' && body['staffCode'] != staffCode) {
+            return _json({'error': 'A valid invite code is required for admin accounts.'}, status: 403);
           }
           user['personType'] = requestedType;
           user['isStaff'] = requestedType != 'homeless';

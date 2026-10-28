@@ -109,9 +109,13 @@ func profileFromUser(u *authUser) (*userProfile, error) {
 
 // --- users ---
 
+// needsInviteCode is true for the roles that need the invite code: admins.
+// A volunteer signs up freely, but sees nothing until an admin approves them.
+func needsInviteCode(personType string) bool { return personType == "admin" }
+
 // validStaffCode reports whether code matches the invite code that lets
-// someone hold a staff account. It is the single gate for both signing up as
-// staff and switching an existing account to a staff role.
+// someone hold an admin account. It is the single gate for both signing up as
+// an admin and switching an existing account to the admin role.
 func validStaffCode(code string) bool {
 	invite := os.Getenv("STAFF_INVITE_CODE")
 	if invite == "" {
@@ -159,8 +163,8 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isStaff(personType) && !validStaffCode(body.StaffCode) {
-		writeError(w, http.StatusForbidden, "A valid staff invite code is required for staff accounts.")
+	if needsInviteCode(personType) && !validStaffCode(body.StaffCode) {
+		writeError(w, http.StatusForbidden, "A valid invite code is required for admin accounts.")
 		return
 	}
 

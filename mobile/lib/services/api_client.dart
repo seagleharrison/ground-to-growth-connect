@@ -580,8 +580,8 @@ const _somethingWentWrong = 'Something went wrong on our end. Please try again i
 /// Turns the server's terse messages into something a person would want to read.
 String _friendlyServerMessage(String? raw, int status) {
   final message = raw?.trim() ?? '';
-  if (message.startsWith('A valid staff invite code')) {
-    return "That staff code doesn't look right. Please double-check it with Ground to Growth and try again.";
+  if (message.startsWith('A valid staff invite code') || message.startsWith('A valid invite code')) {
+    return "That admin code doesn't look right. Please double-check it with Ground to Growth and try again.";
   }
   if (message == 'Internal server error' || status >= 500) return _somethingWentWrong;
   if (message.contains('file too large')) {

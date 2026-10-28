@@ -7,8 +7,8 @@ import '../theme/app_theme.dart';
 import '../widgets/ui.dart';
 
 /// Lets someone switch between a participant account and a staff role.
-/// Moving into a staff role needs the staff invite code — the same one used at
-/// sign-up — because staff can see where participants are.
+/// Moving into the admin role needs the invite code — the same one used at
+/// sign-up — because admins can see where participants are.
 Future<void> showAccountTypeSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
@@ -67,7 +67,7 @@ class _AccountTypeSheetState extends State<AccountTypeSheet> {
     final current = PersonType.fromWire(app.user?.personType ?? 'homeless');
     final picked = _picked ?? current;
     final changing = picked != current;
-    final needsCode = changing && picked.isStaff;
+    final needsCode = changing && picked == PersonType.admin;
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -114,15 +114,17 @@ class _AccountTypeSheetState extends State<AccountTypeSheet> {
                             controller: _code,
                             obscureText: true,
                             autocorrect: false,
-                            decoration: const InputDecoration(labelText: 'Staff invite code', prefixIcon: Icon(Icons.key_rounded)),
+                            decoration: const InputDecoration(labelText: 'Admin invite code', prefixIcon: Icon(Icons.key_rounded)),
                             onChanged: (_) => setState(() {}),
                           ),
                           const SizedBox(height: 10),
                         ],
                         _Heads(
-                          needsCode
-                              ? "You'll stop sharing your location and see the staff map instead of Home and Documents. Your stored documents stay safe and come back if you switch back."
-                              : "You'll get Home and Documents back. Location sharing starts off — you choose whether to turn it on.",
+                          switch (picked) {
+                            PersonType.admin => "You'll stop sharing your location and see the map and every request instead of Home and Documents. Your stored documents stay safe and come back if you switch back.",
+                            PersonType.volunteer => "No code needed. An admin approves each volunteer before they see anything. You'll stop sharing your location and see Help and Messages instead of Home and Documents. Your stored documents stay safe and come back if you switch back.",
+                            PersonType.homeless => "You'll get Home and Documents back. Location sharing starts off — you choose whether to turn it on.",
+                          },
                         ),
                       ],
                     ),
