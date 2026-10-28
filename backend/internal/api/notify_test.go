@@ -139,7 +139,7 @@ func TestServerWorksWithPushTurnedOff(t *testing.T) {
 	}
 }
 
-func TestANewHelpRequestAlertsApprovedStaffButNotPendingBlockedOrPausedOnes(t *testing.T) {
+func TestANewHelpRequestAlertsAdminsOnly(t *testing.T) {
 	h, f := pushServer(t)
 	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	ada, _ := newAdmin(t, h)
@@ -159,12 +159,12 @@ func TestANewHelpRequestAlertsApprovedStaffButNotPendingBlockedOrPausedOnes(t *t
 
 	createHelp(t, h, jane, map[string]interface{}{"category": "food", "note": "private note about my situation"})
 
-	for token, want := range map[string]int{tok("1"): 1, tok("2"): 1, tok("3"): 0, tok("4"): 0, tok("5"): 0, tok("6"): 0} {
+	for token, want := range map[string]int{tok("1"): 1, tok("2"): 0, tok("3"): 0, tok("4"): 0, tok("5"): 0, tok("6"): 0} {
 		if got := len(f.to(token)); got != want {
 			t.Fatalf("token %q: expected %d alerts, got %d", token[:2], want, got)
 		}
 	}
-	n := f.to(tok("2"))[0].n
+	n := f.to(tok("1"))[0].n
 	if strings.Contains(n.Title+n.Body, "private note") || strings.Contains(n.Title+n.Body, "Jane") {
 		t.Fatalf("the alert must not carry the note or the name: %v", n)
 	}
@@ -183,8 +183,8 @@ func TestClaimingTellsThePersonSomeoneIsHelping(t *testing.T) {
 	if len(got) != 1 || got[0].n.Title != "Help is on the way" || strings.Contains(got[0].n.Body, "Sam") {
 		t.Fatalf("expected one generic alert, got %v", got)
 	}
-	// Offering again, or tapping "I can help" on something already theirs, does not alert twice.
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
+	// Assigning it again to the same volunteer does not alert twice.
+	matchVolunteer(t, h, sam, id)
 	if len(f.to(tok("a"))) != 1 {
 		t.Fatalf("a repeated claim must not send another alert")
 	}

@@ -149,25 +149,6 @@ func (s *Server) sendToUser(userID string, n push.Notification) {
 	}
 }
 
-// staffToNotify lists approved volunteers and admins who aren't paused, for
-// "a new request needs someone" style alerts.
-func (s *Server) staffToNotify() []string {
-	rows, err := s.db.Query(
-		`SELECT id FROM users WHERE messaging_disabled = 0 AND (person_type = 'admin' OR (person_type = 'volunteer' AND volunteer_approved = 1))`)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if rows.Scan(&id) == nil {
-			ids = append(ids, id)
-		}
-	}
-	return ids
-}
-
 func (s *Server) adminIDs() []string {
 	rows, err := s.db.Query(`SELECT id FROM users WHERE person_type = 'admin'`)
 	if err != nil {

@@ -287,17 +287,18 @@ func (s *Server) insertHelpRequest(ownerID, category string, noteEnc []byte, app
 		return "", err
 	}
 	var targets []string
-	for _, staffID := range s.staffToNotify() {
+	// People ask the admins; volunteers only hear about what an admin gives them.
+	for _, staffID := range s.adminIDs() {
 		if blocked, _ := s.isBlocked(ownerID, staffID); !blocked && staffID != ownerID {
 			targets = append(targets, staffID)
 		}
 	}
-	body := "Someone asked for help. Open the Help tab to see."
+	body := "Someone asked for help. Open Requests to see."
 	switch category {
 	case "ride":
-		body = "Someone needs a ride. Open the Help tab to see."
+		body = "Someone needs a ride. Open Requests to see."
 	case "supplies":
-		body = "Someone asked for basic items. Open the Help tab to see."
+		body = "Someone asked for basic items. Open Requests to see."
 	}
 	s.notifyUsers(targets, push.Notification{
 		Title: "New request for help",
@@ -326,10 +327,13 @@ func (s *Server) handleMyHelpRequests(w http.ResponseWriter, r *http.Request) {
 // longest.
 func (s *Server) handleHelpBoard(w http.ResponseWriter, r *http.Request) {
 	viewer := userFromCtx(r)
+	// Admins see every request. A volunteer sees only what an admin has
+	// assigned to them: people ask the admins, and the admins do the matching.
 	rs, err := s.loadHelpRequests(viewer.ID,
 		`WHERE hr.status != 'done'
+		   AND (? = 'admin' OR hr.claimed_by = ?)
 		   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = hr.user_id AND b.blocked_id = ?)
-		 ORDER BY hr.created_at ASC`, viewer.ID)
+		 ORDER BY hr.created_at ASC`, viewer.PersonType, viewer.ID, viewer.ID)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -385,13 +389,13 @@ func (s *Server) respondStaffHelpRequest(w http.ResponseWriter, viewerID, id str
 
 func nowStamp() string { return time.Now().UTC().Format("2006-01-02T15:04:05.000Z") }
 
-// handleClaimHelpRequest is "I can help": an approved volunteer or an admin
-// accepts the request, and the person is told someone is coming.
+// handleClaimHelpRequest is "I'll take this one": an admin handles a request
+// themselves. Volunteers are matched by an admin (see help_assign.go).
 func (s *Server) handleClaimHelpRequest(w http.ResponseWriter, r *http.Request) {
 	u := userFromCtx(r)
 	id := r.PathValue("id")
-	if u.MessagingDisabled {
-		writeError(w, http.StatusForbidden, "Your volunteer account is paused. Please contact Ground to Growth.")
+	if u.PersonType != "admin" {
+		writeError(w, http.StatusForbidden, "An admin matches volunteers with requests.")
 		return
 	}
 	res, err := s.db.Exec(

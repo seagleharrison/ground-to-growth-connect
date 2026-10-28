@@ -93,6 +93,8 @@ func NewServer(db *sql.DB, docs blobstore.Store, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /support", pages.Support())
 	mux.HandleFunc("GET /api/admin/people", s.withAuth(s.withAdmin(s.handlePeopleList)))
 	mux.HandleFunc("GET /api/admin/people/{id}", s.withAuth(s.withAdmin(s.handlePersonDetail)))
+	mux.HandleFunc("POST /api/admin/help-requests/{id}/ask", s.withAuth(s.withAdmin(s.handleAskVolunteer)))
+	mux.HandleFunc("POST /api/admin/help-requests/{id}/assign", s.withAuth(s.withAdmin(s.handleAssignHelpRequest)))
 	mux.HandleFunc("GET /api/admin/help-history", s.withAuth(s.withAdmin(s.handleHelpHistory)))
 
 	mux.HandleFunc("GET /api/conversations", s.withAuth(s.handleConversations))

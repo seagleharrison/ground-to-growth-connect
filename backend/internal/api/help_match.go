@@ -140,12 +140,12 @@ func (s *Server) handleHelpProgress(w http.ResponseWriter, r *http.Request) {
 		s.logHelpEvent(id, u.ID, "cant_make_it")
 		s.notifyUser(ownerID, push.Notification{
 			Title: "Your volunteer can't make it",
-			Body:  "Your request is back on the board and we're finding someone else.",
+			Body:  "We're finding someone else to help with your request.",
 			Data:  map[string]string{"kind": "help"},
 		})
 		s.notifyUsers(s.adminIDsExcept(u.ID), push.Notification{
 			Title: "A volunteer can't make it",
-			Body:  "A request is open again. Open the Help tab.",
+			Body:  "A request is open again. Open Requests.",
 			Data:  map[string]string{"kind": "help"},
 		})
 

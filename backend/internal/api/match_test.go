@@ -15,7 +15,7 @@ func matchedRide(t *testing.T, h http.Handler) (jane, sam, ada, id string) {
 	var a map[string]interface{}
 	decodeJSON(t, appt, &a)
 	id = createHelp(t, h, jane, map[string]interface{}{"category": "ride", "appointmentId": asMap(t, a["appointment"])["id"]})["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
+	matchVolunteer(t, h, sam, id)
 	return jane, sam, ada, id
 }
 
@@ -237,7 +237,7 @@ func TestAcceptingAndProgressSendOnlyGenericAlerts(t *testing.T) {
 	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
 	f.reset()
 
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil)
+	matchVolunteer(t, h, sam, id)
 	if got := f.to(tok("a")); len(got) != 1 || got[0].n.Title != "Help is on the way" || strings.Contains(got[0].n.Body, "Sam") {
 		t.Fatalf("the person is told once it's accepted, without a name, got %v", got)
 	}
@@ -260,7 +260,9 @@ func postAppt(t *testing.T, h http.Handler, token string, body map[string]interf
 func ridesOnBoard(t *testing.T, h http.Handler, token string) []map[string]interface{} {
 	t.Helper()
 	var out []map[string]interface{}
-	for _, r := range board(t, h, token) {
+	// Only admins see unassigned requests, so look through a fresh admin's eyes.
+	admin, _ := newAdmin(t, h)
+	for _, r := range board(t, h, admin) {
 		if m := asMap(t, r); m["category"] == "ride" {
 			out = append(out, m)
 		}
@@ -268,12 +270,13 @@ func ridesOnBoard(t *testing.T, h http.Handler, token string) []map[string]inter
 	return out
 }
 
-func TestMarkingAnAppointmentAsNeedingARideShowsItToVolunteersAndAdmins(t *testing.T) {
+func TestMarkingAnAppointmentAsNeedingARideShowsItToAdminsOnly(t *testing.T) {
 	h, f := pushServer(t)
 	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
 	ada, _ := newAdmin(t, h)
 	registerToken(t, h, sam, tok("b"))
+	registerToken(t, h, ada, tok("c"))
 	f.reset()
 
 	code, out := postAppt(t, h, jane, map[string]interface{}{"title": "DDS visit", "location": "DDS, Eisenhower Dr", "startsAt": "2026-12-03T15:00:00Z", "needsRide": true})
@@ -281,18 +284,19 @@ func TestMarkingAnAppointmentAsNeedingARideShowsItToVolunteersAndAdmins(t *testi
 	if code != http.StatusCreated || appt["needsRide"] != true {
 		t.Fatalf("an appointment that needs a ride: got %d %v", code, appt)
 	}
-	for name, token := range map[string]string{"volunteer": sam, "admin": ada} {
-		rides := ridesOnBoard(t, h, token)
-		if len(rides) != 1 {
-			t.Fatalf("the %s should see the ride, got %v", name, rides)
-		}
-		a := asMap(t, rides[0]["appointment"])
-		if rides[0]["name"] != "Jane Doe" || a["title"] != "DDS visit" || a["location"] != "DDS, Eisenhower Dr" {
-			t.Fatalf("the %s should see who, what and where, got %v", name, rides[0])
-		}
+	rides := ridesOnBoard(t, h, ada)
+	if len(rides) != 1 {
+		t.Fatalf("the admin should see the ride, got %v", rides)
 	}
-	if got := f.to(tok("b")); len(got) != 1 || got[0].n.Body != "Someone needs a ride. Open the Help tab to see." {
-		t.Fatalf("volunteers get one generic alert, got %v", got)
+	a := asMap(t, rides[0]["appointment"])
+	if rides[0]["name"] != "Jane Doe" || a["title"] != "DDS visit" || a["location"] != "DDS, Eisenhower Dr" {
+		t.Fatalf("the admin should see who, what and where, got %v", rides[0])
+	}
+	if len(board(t, h, sam)) != 0 || len(f.to(tok("b"))) != 0 {
+		t.Fatalf("a volunteer hears nothing about a ride until an admin gives it to them")
+	}
+	if got := f.to(tok("c")); len(got) != 1 || got[0].n.Body != "Someone needs a ride. Open Requests to see." {
+		t.Fatalf("admins get one generic alert, got %v", got)
 	}
 
 	// It's on their list of appointments as needing a ride.
@@ -351,7 +355,7 @@ func TestChangingOrCancellingARideTellsTheVolunteerWhoAccepted(t *testing.T) {
 	_, out := postAppt(t, h, jane, map[string]interface{}{"title": "DDS visit", "startsAt": "2026-12-03T15:00:00Z", "needsRide": true})
 	id := asMap(t, out["appointment"])["id"].(string)
 	rideID := ridesOnBoard(t, h, sam)[0]["id"].(string)
-	doRequest(t, h, http.MethodPost, "/api/help-requests/"+rideID+"/claim", sam, nil)
+	matchVolunteer(t, h, sam, rideID)
 	f.reset()
 
 	// A new time: Sam is told, with no names or times in the alert.
@@ -414,8 +418,8 @@ func TestAFinishedRideLetsThePersonAskAgainForTheSameAppointment(t *testing.T) {
 func TestAskingForBasicItemsFromAList(t *testing.T) {
 	h, f := pushServer(t)
 	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
-	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
-	registerToken(t, h, sam, tok("b"))
+	ada, _ := newAdmin(t, h)
+	registerToken(t, h, ada, tok("b"))
 	post := func(body map[string]interface{}) (int, map[string]interface{}) {
 		rec := doRequest(t, h, http.MethodPost, "/api/help-requests", jane, body)
 		var out map[string]interface{}
@@ -433,12 +437,12 @@ func TestAskingForBasicItemsFromAList(t *testing.T) {
 	if len(items) != 3 || items[0] != "water" || items[1] != "socks" || items[2] != "blanket" {
 		t.Fatalf("expected water, socks, blanket once each, got %v", items)
 	}
-	if got := f.to(tok("b")); len(got) != 1 || got[0].n.Body != "Someone asked for basic items. Open the Help tab to see." {
-		t.Fatalf("volunteers get one generic alert, got %v", got)
+	if got := f.to(tok("b")); len(got) != 1 || got[0].n.Body != "Someone asked for basic items. Open Requests to see." {
+		t.Fatalf("admins get one generic alert, got %v", got)
 	}
 
-	// Volunteers see the items on the board, and the person's own list shows them too.
-	entry := asMap(t, board(t, h, sam)[0])
+	// Admins see the items on the board, and the person's own list shows them too.
+	entry := asMap(t, board(t, h, ada)[0])
 	if entry["category"] != "supplies" || len(entry["items"].([]interface{})) != 3 {
 		t.Fatalf("the board should show the items, got %v", entry)
 	}
@@ -511,13 +515,13 @@ func TestTheHelpHistoryShowsSuppliesRequestsAsSupplies(t *testing.T) {
 func TestTheBoardListsRidesFirstSoonestAppointmentFirst(t *testing.T) {
 	h := newTestServer(t)
 	jane, _ := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
-	sam, _ := registerUser(t, h, map[string]interface{}{"name": "Sam Helper", "personType": "volunteer", "staffCode": testStaffCode})
+	ada, _ := newAdmin(t, h)
 	createHelp(t, h, jane, map[string]interface{}{"category": "food", "note": "first asked, not a ride"})
 	postAppt(t, h, jane, map[string]interface{}{"title": "Later visit", "startsAt": "2026-12-09T15:00:00Z", "needsRide": true})
 	postAppt(t, h, jane, map[string]interface{}{"title": "Sooner visit", "startsAt": "2026-12-03T15:00:00Z", "needsRide": true})
 
 	var titles []string
-	for _, r := range board(t, h, sam) {
+	for _, r := range board(t, h, ada) {
 		m := asMap(t, r)
 		if appt, ok := m["appointment"].(map[string]interface{}); ok && appt != nil {
 			titles = append(titles, appt["title"].(string))

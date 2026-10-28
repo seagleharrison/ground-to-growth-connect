@@ -128,7 +128,7 @@ func TestBlockingAVolunteerEndsTheirHelpAndHidesTheRequest(t *testing.T) {
 	h := newTestServer(t)
 	jane, janeU := registerUser(t, h, map[string]interface{}{"name": "Jane Doe"})
 	sam, samU := registerUser(t, h, map[string]interface{}{"name": "Sam", "personType": "volunteer", "staffCode": testStaffCode})
-	pat, _ := registerUser(t, h, map[string]interface{}{"name": "Pat", "personType": "volunteer", "staffCode": testStaffCode})
+	ada, _ := newAdmin(t, h)
 	id := createHelp(t, h, jane, map[string]interface{}{"category": "food"})["id"].(string)
 	matchVolunteer(t, h, sam, id)
 	rec := doRequest(t, h, http.MethodPost, "/api/blocks", jane, map[string]interface{}{"userId": idOf(samU)})
@@ -140,10 +140,10 @@ func TestBlockingAVolunteerEndsTheirHelpAndHidesTheRequest(t *testing.T) {
 	if len(board(t, h, sam)) != 0 {
 		t.Fatalf("a blocked volunteer should not see the person's requests")
 	}
-	if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil).Code; code != http.StatusNotFound {
-		t.Fatalf("blocked volunteer claiming: expected 404, got %d", code)
+	if code := assignTo(t, h, ada, samU, id); code != http.StatusConflict {
+		t.Fatalf("assigning a blocked volunteer: expected 409, got %d", code)
 	}
-	if asMap(t, board(t, h, pat)[0])["status"] != "open" {
+	if asMap(t, board(t, h, ada)[0])["status"] != "open" {
 		t.Fatalf("the request should be open again for others")
 	}
 	if code := send(t, h, sam, idOf(janeU), "hello?"); code != http.StatusForbidden {
@@ -158,8 +158,8 @@ func TestBlockingAVolunteerEndsTheirHelpAndHidesTheRequest(t *testing.T) {
 	}
 
 	doRequest(t, h, http.MethodDelete, "/api/blocks/"+idOf(samU), jane, nil)
-	if len(board(t, h, sam)) != 1 {
-		t.Fatalf("after unblocking, Sam can see the request again")
+	if code := assignTo(t, h, ada, samU, id); code != http.StatusOK || len(board(t, h, sam)) != 1 {
+		t.Fatalf("after unblocking, Sam can be given the request again, got %d", code)
 	}
 }
 
@@ -323,11 +323,11 @@ func TestPausingAVolunteerStopsTheirMessagingAndHelpAtOnce(t *testing.T) {
 	if asMap(t, board(t, h, ada)[0])["status"] != "open" {
 		t.Fatalf("pausing should hand their requests back")
 	}
-	if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil).Code; code != http.StatusForbidden {
-		t.Fatalf("paused volunteer claiming: expected 403, got %d", code)
+	if code := assignTo(t, h, ada, samU, id); code != http.StatusConflict {
+		t.Fatalf("assigning a paused volunteer: expected 409, got %d", code)
 	}
 	doRequest(t, h, http.MethodPost, "/api/admin/volunteers/"+idOf(samU)+"/unpause", ada, nil)
-	if code := doRequest(t, h, http.MethodPost, "/api/help-requests/"+id+"/claim", sam, nil).Code; code != http.StatusOK {
+	if code := assignTo(t, h, ada, samU, id); code != http.StatusOK {
 		t.Fatalf("after unpausing: expected 200, got %d", code)
 	}
 }
