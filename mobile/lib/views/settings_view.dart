@@ -9,6 +9,7 @@ import '../util/phone.dart';
 import '../widgets/ui.dart';
 import 'account_type_sheet.dart';
 import 'blocked_people_view.dart';
+import 'contacts_view.dart';
 import 'edit_profile_view.dart';
 import 'my_map_tab_view.dart';
 import 'pushed_screen.dart';
@@ -166,6 +167,36 @@ class _SettingsViewState extends State<SettingsView> {
               key: const Key('open-my-map'),
               subtitle: 'Where you\'ve been, day by day',
               onTap: () => PushedScreen.open(context, title: 'My map', child: const MyMapTabView()),
+            ),
+          if (app.currentView == AppView.admin)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: FadeSlideIn(
+                delay: const Duration(milliseconds: 140),
+                child: AppCard(
+                  key: const Key('open-contacts'),
+                  onTap: () => PushedScreen.open(context, title: 'Contacts', child: const ContactsView()),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.contacts_rounded, color: Brand.orange),
+                      SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Contacts', style: TextStyle(fontWeight: FontWeight.w700)),
+                            SizedBox(height: 2),
+                            Text('Names, phones and notes the team keeps', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                    ],
+                  ),
+                ),
+              ),
             ),
           if (app.user!.isAdmin) ...[
             const SizedBox(height: 12),

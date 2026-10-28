@@ -7,6 +7,7 @@ import 'models/models.dart';
 import 'services/api_client.dart';
 import 'services/calendar_controller.dart';
 import 'services/chat_controller.dart';
+import 'services/contacts_controller.dart';
 import 'services/help_controller.dart';
 import 'services/location_tracker.dart';
 import 'services/push_controller.dart';
@@ -32,6 +33,9 @@ class AppState extends ChangeNotifier {
   /// Contacts and one-to-one chat.
   final chat = ChatController();
 
+  /// Admin-only: the team's shared contact book (name, phone, email, notes).
+  final contacts = ContactsController();
+
   /// Admin-only: volunteer approval, reports and conversation review.
   final safety = SafetyController();
 
@@ -43,6 +47,7 @@ class AppState extends ChangeNotifier {
     calendar.addListener(notifyListeners);
     help.addListener(notifyListeners);
     chat.addListener(notifyListeners);
+    contacts.addListener(notifyListeners);
     safety.addListener(notifyListeners);
     push.addListener(notifyListeners);
     chat.badgeSink = push.setBadge;
@@ -50,6 +55,7 @@ class AppState extends ChangeNotifier {
     calendar.writeBlocked = _blockedByPreview;
     help.writeBlocked = _blockedByPreview;
     chat.writeBlocked = _blockedByPreview;
+    contacts.writeBlocked = _blockedByPreview;
   }
 
   @override
@@ -62,6 +68,8 @@ class AppState extends ChangeNotifier {
     help.dispose();
     chat.removeListener(notifyListeners);
     chat.dispose();
+    contacts.removeListener(notifyListeners);
+    contacts.dispose();
     safety.removeListener(notifyListeners);
     safety.dispose();
     push.removeListener(notifyListeners);
@@ -666,6 +674,7 @@ class AppState extends ChangeNotifier {
     calendar.clearPrivate();
     help.clearPrivate();
     chat.clearPrivate();
+    contacts.clearPrivate();
     safety.clearPrivate();
     push.clearPrivate();
     isUnlocked = false;

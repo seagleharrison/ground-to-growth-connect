@@ -137,6 +137,26 @@ void main() {
         await t.tap(find.byKey(const Key('find-h1')));
         await _settle(t);
       }));
+  testWidgets('admin: contacts', (t) => run(t, '10-admin-contacts', type: 'admin', start: AppTab.me, who: 'Ada Admin', seed: (api) {
+        api.contacts.addAll([
+          {'id': 'c1', 'name': 'Union Mission', 'phone': '912-355-1234', 'email': 'intake@example.org', 'notes': 'Meals at 5. Ask for Denise.'},
+          {'id': 'c2', 'name': 'Dr. Lee Clinic', 'phone': '912-555-0150', 'email': null, 'notes': 'Walk-ins Tue and Thu'},
+          {'id': 'c3', 'name': 'Marcus (case worker)', 'phone': '912-555-0188', 'email': 'marcus@example.org', 'notes': null},
+        ]);
+      }, after: () async {
+        await t.ensureVisible(find.byKey(const Key('open-contacts')));
+        await t.tap(find.byKey(const Key('open-contacts')));
+        await _settle(t);
+      }));
+  testWidgets('admin: a contact', (t) => run(t, '11-admin-contact-open', type: 'admin', start: AppTab.me, who: 'Ada Admin', seed: (api) {
+        api.contacts.add({'id': 'c1', 'name': 'Union Mission', 'phone': '912-355-1234', 'email': 'intake@example.org', 'notes': 'Meals at 5. Ask for Denise.'});
+      }, after: () async {
+        await t.ensureVisible(find.byKey(const Key('open-contacts')));
+        await t.tap(find.byKey(const Key('open-contacts')));
+        await _settle(t);
+        await t.tap(find.byKey(const Key('contact-c1')));
+        await _settle(t);
+      }));
   testWidgets('person: ride on the way', (t) => run(t, '4-person-ride', type: 'homeless', start: AppTab.home, seed: (api) {
         api.helpRequests.add(_ride('h1', progress: 'late', minutes: 20, userId: 'u1'));
       }, after: () async {

@@ -286,6 +286,27 @@ CREATE TABLE IF NOT EXISTS blocks (
   PRIMARY KEY (blocker_id, blocked_id)
 );
 
+-- The admins' shared contact book: people and places the team may need to
+-- reach (a case worker, a clinic, a kitchen). Encrypted at rest, admin-only.
+-- Contacts outlive the admin who added them.
+CREATE TABLE IF NOT EXISTS contacts (
+  id TEXT PRIMARY KEY DEFAULT (
+    lower(hex(randomblob(4))) || '-' ||
+    lower(hex(randomblob(2))) || '-4' ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    substr('89ab', abs(random()) % 4 + 1, 1) ||
+    substr(lower(hex(randomblob(2))), 2) || '-' ||
+    lower(hex(randomblob(6)))
+  ),
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  name_encrypted BLOB NOT NULL,
+  phone_encrypted BLOB,
+  email_encrypted BLOB,
+  notes_encrypted BLOB,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
 -- "Report a problem": anyone can flag a person, and admins review them.
 CREATE TABLE IF NOT EXISTS reports (
   id TEXT PRIMARY KEY DEFAULT (

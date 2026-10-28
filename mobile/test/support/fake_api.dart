@@ -74,6 +74,10 @@ class FakeApi {
   /// The one-tap updates sent during matches (on_my_way, arrived, ...), in order.
   final List<String> progressTaps = [];
 
+  /// The admins' shared contact book (GET /api/admin/contacts).
+  final List<Map<String, dynamic>> contacts = [];
+  int _nextContactId = 1;
+
   /// "requestId:volunteerId" for each ping and each assignment an admin made.
   final List<String> asked = [];
   final List<String> assigned = [];
@@ -247,6 +251,40 @@ class FakeApi {
         appointments.removeWhere((a) => a['id'] == id);
         return _json({'deleted': true});
       }
+    }
+
+    // Admins' contact book: /api/admin/contacts[/{id}]
+    final contactMatch = RegExp(r'^/api/admin/contacts(?:/(c\d+))?$').firstMatch(request.url.path);
+    if (contactMatch != null) {
+      if (user['personType'] != 'admin') return _json({'error': 'Admin access required'}, status: 403);
+      final id = contactMatch.group(1);
+      Map<String, dynamic> clean(Map<String, dynamic> body, Map<String, dynamic> base) {
+        String? opt(Object? v) => (v as String?)?.trim().isEmpty ?? true ? null : (v as String).trim();
+        return {
+          'id': base['id'],
+          'name': ((body['name'] ?? base['name']) as String).trim(),
+          'phone': body.containsKey('phone') ? opt(body['phone']) : base['phone'],
+          'email': body.containsKey('email') ? opt(body['email']) : base['email'],
+          'notes': body.containsKey('notes') ? opt(body['notes']) : base['notes'],
+        };
+      }
+      if (id == null && request.method == 'GET') return _json({'contacts': contacts});
+      if (id == null && request.method == 'POST') {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        if (((body['name'] as String?) ?? '').trim().isEmpty) return _json({'error': 'A contact needs a name.'}, status: 400);
+        final c = clean(body, {'id': 'c${_nextContactId++}'});
+        contacts.add(c);
+        return _json({'contact': c}, status: 201);
+      }
+      final existing = contacts.where((c) => c['id'] == id).firstOrNull;
+      if (existing == null) return _json({'error': 'Not found'}, status: 404);
+      if (request.method == 'DELETE') {
+        contacts.remove(existing);
+        return _json({'deleted': true});
+      }
+      final updated = clean(jsonDecode(request.body) as Map<String, dynamic>, existing);
+      contacts[contacts.indexOf(existing)] = updated;
+      return _json({'contact': updated});
     }
 
     // Admins: ask a volunteer about a request, or give it to them.

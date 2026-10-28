@@ -91,6 +91,10 @@ func NewServer(db *sql.DB, docs blobstore.Store, opts ...Option) http.Handler {
 	// Public pages the app stores require.
 	mux.HandleFunc("GET /privacy", pages.Privacy())
 	mux.HandleFunc("GET /support", pages.Support())
+	mux.HandleFunc("GET /api/admin/contacts", s.withAuth(s.withAdmin(s.handleListContacts)))
+	mux.HandleFunc("POST /api/admin/contacts", s.withAuth(s.withAdmin(s.handleCreateContact)))
+	mux.HandleFunc("PATCH /api/admin/contacts/{id}", s.withAuth(s.withAdmin(s.handleUpdateContact)))
+	mux.HandleFunc("DELETE /api/admin/contacts/{id}", s.withAuth(s.withAdmin(s.handleDeleteContact)))
 	mux.HandleFunc("GET /api/admin/people", s.withAuth(s.withAdmin(s.handlePeopleList)))
 	mux.HandleFunc("GET /api/admin/people/{id}", s.withAuth(s.withAdmin(s.handlePersonDetail)))
 	mux.HandleFunc("POST /api/admin/help-requests/{id}/ask", s.withAuth(s.withAdmin(s.handleAskVolunteer)))

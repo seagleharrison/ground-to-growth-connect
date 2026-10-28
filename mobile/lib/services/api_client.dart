@@ -475,6 +475,35 @@ class ApiClient {
     return (json['people'] as List).map((p) => PersonSummary.fromJson(p as Map<String, dynamic>)).toList();
   }
 
+  /// Admins: the shared contact book.
+  Future<List<Contact>> fetchContacts() async {
+    final json = await _request(path: '/api/admin/contacts');
+    return (json['contacts'] as List).map((c) => Contact.fromJson(c as Map<String, dynamic>)).toList();
+  }
+
+  Future<Contact> createContact({required String name, String? phone, String? email, String? notes}) async {
+    final json = await _request(
+      path: '/api/admin/contacts',
+      method: 'POST',
+      body: {'name': name, 'phone': phone, 'email': email, 'notes': notes},
+    );
+    return Contact.fromJson(json['contact'] as Map<String, dynamic>);
+  }
+
+  /// A blank phone, email or notes clears it.
+  Future<Contact> updateContact(String id, {required String name, String? phone, String? email, String? notes}) async {
+    final json = await _request(
+      path: '/api/admin/contacts/$id',
+      method: 'PATCH',
+      body: {'name': name, 'phone': phone ?? '', 'email': email ?? '', 'notes': notes ?? ''},
+    );
+    return Contact.fromJson(json['contact'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteContact(String id) async {
+    await _request(path: '/api/admin/contacts/$id', method: 'DELETE');
+  }
+
   /// Admins: one person's profile. Each look is recorded on the server.
   Future<PersonDetail> fetchPerson(String userId) async {
     final json = await _request(path: '/api/admin/people/$userId');
