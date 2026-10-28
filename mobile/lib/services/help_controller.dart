@@ -143,6 +143,20 @@ class HelpController extends ChangeNotifier {
       return e is GgcException ? e.message : "Couldn't update that.";
     }
   }
+  /// Admins: give a request to a volunteer.
+  Future<String?> assign(String id, String volunteerId) => _board(id, (id) => ApiClient.shared.assignHelpRequest(id, volunteerId));
+
+  /// Admins: ping a volunteer in chat about a request. They are not matched yet.
+  Future<String?> askVolunteer(String id, String volunteerId) async {
+    if (writeBlocked?.call() == true) return "Switched off while previewing.";
+    try {
+      await ApiClient.shared.askVolunteerAboutRequest(id, volunteerId);
+      return null;
+    } catch (e) {
+      return e is GgcException ? e.message : "Couldn't send that.";
+    }
+  }
+
   Future<String?> release(String id) => _board(id, ApiClient.shared.releaseHelpRequest);
   Future<String?> finish(String id) => _board(id, ApiClient.shared.completeHelpRequest, drop: true);
 

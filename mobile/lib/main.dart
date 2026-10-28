@@ -31,7 +31,7 @@ class GroundToGrowthConnectApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TabNav()),
       ],
       child: MaterialApp(
-        title: 'Ground to Growth Connect',
+        title: 'Rooted',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         darkTheme: buildAppTheme(),

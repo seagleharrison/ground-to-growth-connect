@@ -62,6 +62,7 @@ class _MainTabViewState extends State<MainTabView> {
         nav.go(staff ? AppTab.messages : AppTab.home);
         _openChatWith(tap['userId']);
       case 'help':
+      case 'help-assigned':
       case 'help-offer':
         nav.go(staff ? AppTab.help : AppTab.home);
       case 'help-claimed':
@@ -229,7 +230,9 @@ class _MainTabViewState extends State<MainTabView> {
       if (isStaff)
         (
           tab: AppTab.help,
-          item: const NavItem(Icons.volunteer_activism_outlined, Icons.volunteer_activism_rounded, 'Help'),
+          // Admins see every request and match volunteers to them; a volunteer
+          // sees what an admin has given them.
+          item: NavItem(Icons.volunteer_activism_outlined, Icons.volunteer_activism_rounded, isAdmin ? 'Requests' : 'Help'),
           view: const HelpBoardView(),
         ),
       if (isStaff)

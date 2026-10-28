@@ -347,6 +347,18 @@ class ApiClient {
   Future<HelpRequest> releaseHelpRequest(String id) => _helpAction(id, 'release');
   Future<HelpRequest> completeHelpRequest(String id) => _helpAction(id, 'complete');
 
+  /// Admins: give a request to a volunteer. The person is told help is coming
+  /// and the volunteer is told it is theirs.
+  Future<HelpRequest> assignHelpRequest(String id, String volunteerId) async {
+    final json = await _request(path: '/api/admin/help-requests/$id/assign', method: 'POST', body: {'volunteerId': volunteerId});
+    return HelpRequest.fromJson(json['request'] as Map<String, dynamic>);
+  }
+
+  /// Admins: ask a volunteer in chat whether they can help with a request.
+  Future<void> askVolunteerAboutRequest(String id, String volunteerId) async {
+    await _request(path: '/api/admin/help-requests/$id/ask', method: 'POST', body: {'volunteerId': volunteerId});
+  }
+
   Future<HelpRequest> _helpAction(String id, String action) async {
     final json = await _request(path: '/api/help-requests/$id/$action', method: 'POST');
     return HelpRequest.fromJson(json['request'] as Map<String, dynamic>);

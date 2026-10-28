@@ -73,6 +73,10 @@ class FakeApi {
 
   /// The one-tap updates sent during matches (on_my_way, arrived, ...), in order.
   final List<String> progressTaps = [];
+
+  /// "requestId:volunteerId" for each ping and each assignment an admin made.
+  final List<String> asked = [];
+  final List<String> assigned = [];
   int _nextHelpId = 1;
 
   /// Contacts for GET /api/conversations, and each person's thread.
@@ -245,6 +249,25 @@ class FakeApi {
       }
     }
 
+    // Admins: ask a volunteer about a request, or give it to them.
+    final matchAction = RegExp(r'^/api/admin/help-requests/(h\d+)/(ask|assign)$').firstMatch(request.url.path);
+    if (matchAction != null) {
+      if (user['personType'] != 'admin') return _json({'error': 'Admin access required'}, status: 403);
+      final hr = helpRequests.where((h) => h['id'] == matchAction.group(1)).firstOrNull;
+      if (hr == null) return _json({'error': 'Not found'}, status: 404);
+      final volunteerId = (jsonDecode(request.body) as Map<String, dynamic>)['volunteerId'] as String;
+      if (matchAction.group(2) == 'ask') {
+        asked.add('${hr['id']}:$volunteerId');
+        return _json({'asked': true, 'volunteerId': volunteerId});
+      }
+      final volunteer = people.where((p) => p['userId'] == volunteerId).firstOrNull;
+      hr['status'] = 'claimed';
+      hr['claimedByMe'] = false;
+      hr['helperName'] = ((volunteer?['name'] as String?) ?? 'A volunteer').split(' ').first;
+      assigned.add('${hr['id']}:$volunteerId');
+      return _json({'request': hr});
+    }
+
     // Help requests: /api/help-requests[/{id}[/claim|release|complete]]
     final helpMatch = RegExp(r'^/api/help-requests/(h\d+)(?:/(claim|release|complete|progress|rating))?$').firstMatch(request.url.path);
     if (helpMatch != null) {
@@ -256,6 +279,7 @@ class FakeApi {
         return _json({'deleted': true});
       }
       if (action == 'claim') {
+        if (user['personType'] != 'admin') return _json({'error': 'An admin matches volunteers with requests.'}, status: 403);
         if (hr['status'] == 'claimed' && hr['claimedByMe'] != true) {
           return _json({'error': 'Someone else is already helping with this.'}, status: 409);
         }
@@ -414,7 +438,9 @@ class FakeApi {
         if (user['personType'] == 'volunteer' && !volunteerApproved) {
           return _json({'error': 'An admin needs to approve your volunteer account before you can do this.'}, status: 403);
         }
-        return _json({'requests': [for (final h in helpRequests) if (h['status'] != 'done') h]});
+        // A volunteer sees only what an admin has given them; admins see everything.
+        final mineOnly = user['personType'] == 'volunteer';
+        return _json({'requests': [for (final h in helpRequests) if (h['status'] != 'done' && (!mineOnly || h['claimedByMe'] == true)) h]});
       case 'POST /api/help-requests':
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final appt = appointments.where((a) => a['id'] == body['appointmentId']).firstOrNull;

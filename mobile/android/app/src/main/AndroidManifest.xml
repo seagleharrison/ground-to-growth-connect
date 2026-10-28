@@ -10,7 +10,7 @@
     <!-- Android 13+: lets the "sharing your location" indicator show while the app is in the background. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
-        android:label="Ground to Growth"
+        android:label="Rooted"
         android:name="${applicationName}"
         android:allowBackup="false"
         android:fullBackupContent="false"

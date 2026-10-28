@@ -13,10 +13,11 @@ import '../widgets/ui.dart';
 import 'messages_view.dart';
 import 'notifications_card.dart';
 import 'unsafe_dialog.dart';
+import 'volunteer_picker_sheet.dart';
 
-/// Help tab for volunteers and admins: what people have asked for, so they
-/// can see what's needed and step in. Taking one on tells the person someone
-/// is helping, and opens the way to message the team about it.
+/// The Requests tab for admins, and the Help tab for volunteers. People ask
+/// the admins; an admin picks a volunteer (ping them, chat, then assign), and
+/// the volunteer sees only what they were given, with the usual one-tap steps.
 class HelpBoardView extends StatefulWidget {
   const HelpBoardView({super.key});
 
@@ -62,19 +63,23 @@ class _HelpBoardViewState extends State<HelpBoardView> {
     final team = app.chat.conversations.where((c) => c.role == 'team').firstOrNull;
 
     return LargeTitlePage(
-      title: 'Help',
+      title: isAdmin ? 'Requests' : 'Help',
       onRefresh: help.refreshBoard,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 14),
           child: Text(
             isAdmin
-                ? 'What people have asked for, rides first. Anyone can accept one, and the person is told someone is coming.'
-                : 'What people have asked for, rides first. Accept one and the person is told someone is coming, then tap each step as you go.',
+                ? 'What people have asked for, rides first. Find a volunteer for each: ping them, chat, then assign it.'
+                : 'Requests an admin has given you show here. Tap each step as you go. The admins stay in touch with the person.',
             style: const TextStyle(color: Colors.white60, height: 1.4),
           ),
         ),
-        const NotificationsCard(reason: 'Hear about new requests and messages even when the app is closed.'),
+        NotificationsCard(
+          reason: isAdmin
+              ? 'Hear about new requests and messages even when the app is closed.'
+              : 'Hear when an admin gives you a request or messages you, even when the app is closed.',
+        ),
         if (help.boardError != null && help.boardError!.contains('approve'))
           AppCard(
             key: const Key('awaiting-approval'),
@@ -102,9 +107,14 @@ class _HelpBoardViewState extends State<HelpBoardView> {
         else if (help.boardError != null)
           Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(help.boardError!, style: const TextStyle(color: Brand.red))),
         if (help.board.isEmpty && !help.isLoadingBoard && help.boardError == null)
-          const AppCard(
-            key: Key('board-empty'),
-            child: Text('Nothing needed right now. New requests show up here.', style: TextStyle(color: Colors.white70, height: 1.4)),
+          AppCard(
+            key: const Key('board-empty'),
+            child: Text(
+              isAdmin
+                  ? 'Nothing needed right now. New requests show up here.'
+                  : 'Nothing has been given to you yet. An admin will message you when they need your help.',
+              style: const TextStyle(color: Colors.white70, height: 1.4),
+            ),
           ),
         for (final r in help.board)
           Padding(
@@ -113,6 +123,7 @@ class _HelpBoardViewState extends State<HelpBoardView> {
               request: r,
               isAdmin: isAdmin,
               onClaim: () => _run(() => help.claim(r.id)),
+              onFindVolunteer: () => showVolunteerPicker(context, r),
               onRelease: () => _run(() => help.release(r.id)),
               onFinish: () => _run(() => help.finish(r.id)),
               onProgress: (kind, {minutes}) => _run(() => help.progress(r.id, kind, minutes: minutes)),
@@ -144,6 +155,7 @@ class _BoardCard extends StatelessWidget {
   final HelpRequest request;
   final bool isAdmin;
   final VoidCallback onClaim;
+  final VoidCallback onFindVolunteer;
   final VoidCallback onRelease;
   final VoidCallback onFinish;
   final VoidCallback onMessage;
@@ -155,6 +167,7 @@ class _BoardCard extends StatelessWidget {
     required this.request,
     required this.isAdmin,
     required this.onClaim,
+    required this.onFindVolunteer,
     required this.onRelease,
     required this.onFinish,
     required this.onMessage,
@@ -163,12 +176,6 @@ class _BoardCard extends StatelessWidget {
     required this.onUnsafe,
   });
 
-  String get _claimLabel => switch (request.category) {
-        HelpCategory.ride => 'I can give this ride',
-        HelpCategory.supplies => 'I can bring these',
-        _ => 'I can help',
-      };
-
   @override
   Widget build(BuildContext context) {
     final r = request;
@@ -176,7 +183,7 @@ class _BoardCard extends StatelessWidget {
     final mine = r.claimedByMe;
     final isRide = r.category == HelpCategory.ride;
     final title = isRide && appt != null ? 'Ride to ${appt.title}' : r.category.label;
-    final hasMenu = mine || (isAdmin && (canMessage || (r.isClaimed && !mine)));
+    final hasMenu = mine || isAdmin;
 
     return AppCard(
       key: Key('help-${r.id}'),
@@ -201,7 +208,7 @@ class _BoardCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (hasMenu) _Menu(request: r, isAdmin: isAdmin, mine: mine, canMessage: canMessage, onMessage: onMessage, onRelease: onRelease, onProgress: onProgress),
+              if (hasMenu) _Menu(request: r, isAdmin: isAdmin, mine: mine, canMessage: canMessage, onMessage: onMessage, onRelease: onRelease, onClaim: onClaim, onFindVolunteer: onFindVolunteer, onProgress: onProgress),
             ],
           ),
           if (r.isClaimed) ...[
@@ -256,13 +263,13 @@ class _BoardCard extends StatelessWidget {
               ),
             ),
           ],
-          if (r.isOpen) ...[
+          if (r.isOpen && isAdmin) ...[
             const SizedBox(height: 14),
             FilledButton.icon(
-              key: Key('claim-${r.id}'),
-              onPressed: onClaim,
-              icon: const Icon(Icons.volunteer_activism_rounded, size: 18),
-              label: Text(_claimLabel),
+              key: Key('find-${r.id}'),
+              onPressed: onFindVolunteer,
+              icon: const Icon(Icons.person_search_rounded, size: 18),
+              label: const Text('Find a volunteer'),
             ),
           ],
           if (mine) ...[
@@ -306,8 +313,10 @@ class _Menu extends StatelessWidget {
   final bool canMessage;
   final VoidCallback onMessage;
   final VoidCallback onRelease;
+  final VoidCallback onClaim;
+  final VoidCallback onFindVolunteer;
   final void Function(String kind, {int? minutes}) onProgress;
-  const _Menu({required this.request, required this.isAdmin, required this.mine, required this.canMessage, required this.onMessage, required this.onRelease, required this.onProgress});
+  const _Menu({required this.request, required this.isAdmin, required this.mine, required this.canMessage, required this.onMessage, required this.onRelease, required this.onClaim, required this.onFindVolunteer, required this.onProgress});
 
   @override
   Widget build(BuildContext context) {
@@ -322,6 +331,10 @@ class _Menu extends StatelessWidget {
           onMessage();
         } else if (v == 'free') {
           onRelease();
+        } else if (v == 'take') {
+          onClaim();
+        } else if (v == 'reassign') {
+          onFindVolunteer();
         } else if (v == 'cant') {
           onProgress('cant_make_it');
         } else if (v.startsWith('late-')) {
@@ -333,6 +346,8 @@ class _Menu extends StatelessWidget {
           for (final m in const [10, 20, 30, 60]) PopupMenuItem(key: Key('late-${r.id}-$m'), value: 'late-$m', child: Text('Running about $m min late')),
         if (mine) PopupMenuItem(key: Key('cant-make-it-${r.id}'), value: 'cant', child: const Text("Can't make it")),
         if (canMessage) PopupMenuItem(key: Key('message-${r.id}'), value: 'message', child: Text(isAdmin ? 'Message ${r.name ?? 'them'}' : 'Message the team')),
+        if (isAdmin && r.isOpen) PopupMenuItem(key: Key('take-${r.id}'), value: 'take', child: const Text("I'll handle this myself")),
+        if (isAdmin && r.isClaimed && !mine) PopupMenuItem(key: Key('reassign-${r.id}'), value: 'reassign', child: const Text('Give to someone else')),
         if (!mine && isAdmin && r.isClaimed) PopupMenuItem(key: Key('free-${r.id}'), value: 'free', child: const Text('Free up')),
       ],
     );

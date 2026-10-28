@@ -114,18 +114,28 @@ void main() {
     }, () => api.client);
   }
 
-  testWidgets('volunteer: board', (t) => run(t, '1-volunteer-board', type: 'volunteer', start: AppTab.help, who: 'Sam Helper', seed: (api) {
+  testWidgets('volunteer: given requests', (t) => run(t, '1-volunteer-board', type: 'volunteer', start: AppTab.help, who: 'Sam Helper', seed: (api) {
         api.helpRequests
-          ..add(_ride('h1', status: 'open'))
-          ..add(_ride('h2', status: 'open', who: 'Bob Smith', userId: 'p2', category: 'supplies', items: ['socks', 'blanket', 'water', 'hygiene_kit']));
+          ..add(_ride('h1', mine: true))
+          ..add(_ride('h2', mine: true, who: 'Bob Smith', userId: 'p2', category: 'supplies', items: ['socks', 'blanket', 'water', 'hygiene_kit']));
       }));
   testWidgets('volunteer: on a ride', (t) => run(t, '2-volunteer-ride', type: 'volunteer', start: AppTab.help, who: 'Sam Helper', seed: (api) {
         api.helpRequests.add(_ride('h1', mine: true, progress: 'on_my_way'));
       }));
-  testWidgets('admin: board', (t) => run(t, '3-admin-board', type: 'admin', start: AppTab.help, who: 'Ada Admin', seed: (api) {
+  testWidgets('admin: requests', (t) => run(t, '3-admin-board', type: 'admin', start: AppTab.help, who: 'Ada Admin', seed: (api) {
         api.helpRequests
           ..add(_ride('h1', status: 'open'))
           ..add(_ride('h2', progress: 'on_my_way', who: 'Bob Smith', userId: 'p2'));
+      }));
+  testWidgets('admin: find a volunteer', (t) => run(t, '9-admin-find-volunteer', type: 'admin', start: AppTab.help, who: 'Ada Admin', seed: (api) {
+        api.helpRequests.add(_ride('h1', status: 'open'));
+        api.people.addAll([
+          {'userId': 'v1', 'name': 'Sam Helper', 'role': 'volunteer', 'joinedAt': _at(-9, 12), 'approved': true, 'paused': false, 'thumbsUp': 4, 'thumbsDown': 0},
+          {'userId': 'v2', 'name': 'Pat Rivera', 'role': 'volunteer', 'joinedAt': _at(-5, 12), 'approved': true, 'paused': false, 'thumbsUp': 1, 'thumbsDown': 1},
+        ]);
+      }, after: () async {
+        await t.tap(find.byKey(const Key('find-h1')));
+        await _settle(t);
       }));
   testWidgets('person: ride on the way', (t) => run(t, '4-person-ride', type: 'homeless', start: AppTab.home, seed: (api) {
         api.helpRequests.add(_ride('h1', progress: 'late', minutes: 20, userId: 'u1'));
