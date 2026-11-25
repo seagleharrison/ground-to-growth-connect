@@ -136,6 +136,9 @@ func main() {
 	} else {
 		log.Printf("push notifications are off (no Apple key configured)")
 	}
+	if strings.TrimSpace(os.Getenv("STAFF_INVITE_CODE")) == "" {
+		log.Printf("WARNING: STAFF_INVITE_CODE is not set, so nobody can sign up as (or switch to) an admin until it is")
+	}
 	handler := api.NewServer(db, docs, apiOpts...)
 	srv := &http.Server{
 		Addr:              host + ":" + port,

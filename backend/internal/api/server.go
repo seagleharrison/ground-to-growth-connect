@@ -24,10 +24,21 @@ type Server struct {
 	// push is nil until an Apple key is configured.
 	push     push.Sender
 	pushSync bool
+
+	// Per-IP limits on the routes that need no sign-in (see ratelimit.go).
+	registerLimiter *rateLimiter
+	recoverLimiter  *rateLimiter
+	clientIPHeader  string
 }
 
 func NewServer(db *sql.DB, docs blobstore.Store, opts ...Option) http.Handler {
-	s := &Server{db: db, docs: docs}
+	s := &Server{
+		db:              db,
+		docs:            docs,
+		registerLimiter: newRateLimiter(registerLimit, registerWindow),
+		recoverLimiter:  newRateLimiter(recoverLimit, recoverWindow),
+		clientIPHeader:  strings.TrimSpace(os.Getenv("CLIENT_IP_HEADER")),
+	}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -50,8 +61,8 @@ func NewServer(db *sql.DB, docs blobstore.Store, opts ...Option) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
 
-	mux.HandleFunc("POST /api/users", s.handleRegister)
-	mux.HandleFunc("POST /api/recover", s.handleRecover)
+	mux.HandleFunc("POST /api/users", s.withRateLimit(s.registerLimiter, s.handleRegister))
+	mux.HandleFunc("POST /api/recover", s.withRateLimit(s.recoverLimiter, s.handleRecover))
 	mux.HandleFunc("GET /api/me", s.withAuth(s.handleMe))
 	mux.HandleFunc("PATCH /api/me", s.withAuth(s.handleUpdateProfile))
 	mux.HandleFunc("PUT /api/me/picture", s.withAuth(s.handlePutProfilePicture))

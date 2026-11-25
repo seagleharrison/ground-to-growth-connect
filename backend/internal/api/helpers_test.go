@@ -73,6 +73,9 @@ func setupTestServerWithOptions(t *testing.T, opts ...Option) (http.Handler, *sq
 			t.Fatalf("approve: %v", err)
 		}
 	}
+	// Most tests register many accounts from the same test address, so the
+	// per-IP limits are off unless a test passes its own withRateLimits.
+	opts = append([]Option{withRateLimits(nil, nil)}, opts...)
 	return NewServer(db, docs, opts...), db, docs
 }
 
