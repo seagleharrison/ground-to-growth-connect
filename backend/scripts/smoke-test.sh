@@ -5,12 +5,12 @@
 # Usage:
 #   ./smoke-test.sh                          # tests http://127.0.0.1:3001
 #   ./smoke-test.sh https://api.groundtogrowth.org
-#   STAFF_INVITE_CODE=g2g-staff ./smoke-test.sh
+#   STAFF_INVITE_CODE=<your code> ./smoke-test.sh
 
 set -uo pipefail
 
 BASE="${1:-http://127.0.0.1:3001}"
-STAFF_CODE="${STAFF_INVITE_CODE:-g2g-staff}"
+STAFF_CODE="${STAFF_INVITE_CODE:-}"
 PASS=0
 FAIL=0
 

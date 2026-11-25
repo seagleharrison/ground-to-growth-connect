@@ -115,11 +115,13 @@ func needsInviteCode(personType string) bool { return personType == "admin" }
 
 // validStaffCode reports whether code matches the invite code that lets
 // someone hold an admin account. It is the single gate for both signing up as
-// an admin and switching an existing account to the admin role.
+// an admin and switching an existing account to the admin role. With no
+// STAFF_INVITE_CODE configured there is no valid code, so nobody can become an
+// admin: a missing setting must never fall back to a code anyone could guess.
 func validStaffCode(code string) bool {
-	invite := os.Getenv("STAFF_INVITE_CODE")
+	invite := strings.TrimSpace(os.Getenv("STAFF_INVITE_CODE"))
 	if invite == "" {
-		invite = "g2g-staff"
+		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(code), []byte(invite)) == 1
 }

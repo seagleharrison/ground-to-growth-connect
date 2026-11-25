@@ -8,8 +8,12 @@ primary_region = "iad"
 [env]
   PORT = "3001"
   SQLITE_PATH = "/data/locvault.db"
+  # Fly's proxy puts the visitor's IP here; used for per-IP rate limits.
+  CLIENT_IP_HEADER = "Fly-Client-IP"
   # NOTE: ENCRYPTION_KEY is NOT set here. Set it as a secret:
   #   fly secrets set ENCRYPTION_KEY=$(openssl rand -hex 32)
+  # Same for the admin invite code (admin sign-up is off until it's set):
+  #   fly secrets set STAFF_INVITE_CODE=$(openssl rand -hex 12)
 
 [http_service]
   internal_port = 3001

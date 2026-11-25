@@ -52,7 +52,13 @@ Edit `.env` and set at minimum:
 
 - `ENCRYPTION_KEY` — the 64-char hex value you just generated.
   **Back this up.** If it changes, previously stored data can't be decrypted.
-- `STAFF_INVITE_CODE` — the code staff enter to register privileged accounts.
+- `STAFF_INVITE_CODE` — the private code someone enters to sign up as an admin
+  (volunteers don't need it). Use a long random value, e.g. `openssl rand -hex 12`.
+  There is no default: if it's empty, nobody can become an admin.
+- `CLIENT_IP_HEADER` — docker-compose sets this to `X-Forwarded-For` so sign-up
+  (30 per hour) and recovery (10 per 15 minutes) are limited per visitor IP
+  behind Caddy. Put `CLIENT_IP_HEADER=` (empty) in `.env` if you expose the API
+  with no proxy in front.
 - For HTTPS: `DOMAIN` and `TLS_EMAIL`.
 - `CORS_ORIGIN` — set to your web app's URL if you deploy the frontend (or `*`).
 - `B2_ENDPOINT` / `B2_REGION` / `B2_BUCKET` / `B2_KEY_ID` / `B2_APPLICATION_KEY` —

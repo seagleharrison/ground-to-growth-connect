@@ -13,6 +13,9 @@ services:
     environment:
       # SQLite lives on the mounted volume so data survives restarts/redeploys.
       SQLITE_PATH: /data/locvault.db
+      # Caddy passes the visitor's IP in X-Forwarded-For; the API uses it to
+      # limit sign-up and recovery attempts per visitor.
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER-X-Forwarded-For}
     volumes:
       - g2g_data:/data
       # Apple push key (AuthKey_XXXX.p8), kept out of git. Optional: without it
